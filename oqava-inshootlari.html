@@ -1,0 +1,1032 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Oqava Suv Inshootlari — Bazasi</title>
+<style>
+  :root{
+    --bg:#EEF2F1;
+    --surface:#FFFFFF;
+    --ink:#16262A;
+    --muted:#62777A;
+    --border:#DCE6E5;
+    --teal:#0F6B7A;
+    --teal-deep:#0A4A54;
+    --amber:#D97706;
+    --green:#1F9254;
+    --red:#D6493F;
+    --radius:10px;
+    --shadow:0 2px 10px rgba(10,40,45,.08);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--bg);
+    color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    -webkit-tap-highlight-color:transparent;
+    padding-bottom:88px;
+  }
+  .mono{font-family:ui-monospace,"SF Mono","Roboto Mono",Menlo,monospace;}
+  .eyebrow{
+    text-transform:uppercase;
+    letter-spacing:.08em;
+    font-size:11px;
+    font-weight:700;
+    color:var(--muted);
+  }
+  a{color:var(--teal);}
+  button{font-family:inherit;}
+  input, select, textarea{
+    font-family:inherit;
+    font-size:16px;
+  }
+  code{background:#0000000d; padding:1px 5px; border-radius:4px; font-family:ui-monospace,"SF Mono","Roboto Mono",Menlo,monospace;}
+  :focus-visible{outline:2px solid var(--teal); outline-offset:2px;}
+
+  /* ---------- Header ---------- */
+  header{
+    background:var(--teal-deep);
+    color:#fff;
+    padding:16px 16px 14px;
+    position:sticky; top:0; z-index:20;
+    box-shadow:0 2px 8px rgba(0,0,0,.15);
+  }
+  header .title-row{display:flex; align-items:center; justify-content:space-between; gap:8px;}
+  header h1{
+    margin:0;
+    font-size:19px;
+    font-weight:800;
+    letter-spacing:.01em;
+  }
+  header .sub{
+    margin-top:2px;
+    font-size:11px;
+    letter-spacing:.06em;
+    color:#AFD7DC;
+    text-transform:uppercase;
+  }
+  #connBadge{font-weight:700;}
+  .icon-btn{
+    background:rgba(255,255,255,.12);
+    border:1px solid rgba(255,255,255,.2);
+    color:#fff;
+    width:36px; height:36px;
+    border-radius:8px;
+    display:flex; align-items:center; justify-content:center;
+    font-size:16px;
+    cursor:pointer;
+  }
+  .header-actions{display:flex; gap:8px;}
+
+  .stats-row{
+    display:flex; gap:8px; overflow-x:auto;
+    margin-top:12px;
+    padding-bottom:2px;
+  }
+  .stat-chip{
+    flex:none;
+    background:rgba(255,255,255,.1);
+    border:1px solid rgba(255,255,255,.16);
+    border-radius:8px;
+    padding:6px 10px;
+    font-size:12px;
+    font-family:ui-monospace,"SF Mono","Roboto Mono",Menlo,monospace;
+    white-space:nowrap;
+  }
+  .stat-chip b{font-size:13px;}
+
+  /* ---------- Filters ---------- */
+  .filters{
+    position:sticky; top:84px; z-index:19;
+    background:var(--bg);
+    padding:12px 16px 8px;
+    border-bottom:1px solid var(--border);
+  }
+  .chips{
+    display:flex; gap:8px; overflow-x:auto;
+    padding-bottom:8px;
+    -webkit-overflow-scrolling:touch;
+  }
+  .chip{
+    flex:none;
+    background:var(--surface);
+    border:1px solid var(--border);
+    color:var(--ink);
+    padding:7px 12px;
+    border-radius:20px;
+    font-size:13px;
+    font-weight:600;
+    cursor:pointer;
+    white-space:nowrap;
+  }
+  .chip.active{
+    background:var(--teal);
+    border-color:var(--teal);
+    color:#fff;
+  }
+  .search-row{display:flex; gap:8px;}
+  .search-row input[type=search]{
+    flex:1;
+    padding:10px 12px;
+    border:1px solid var(--border);
+    border-radius:8px;
+    background:var(--surface);
+  }
+  .search-row select{
+    border:1px solid var(--border);
+    border-radius:8px;
+    background:var(--surface);
+    padding:10px 8px;
+    max-width:132px;
+  }
+
+  /* ---------- List ---------- */
+  main{padding:12px 16px 24px;}
+  .empty-state{
+    text-align:center;
+    color:var(--muted);
+    padding:56px 20px;
+    font-size:14px;
+  }
+  .empty-state .big{font-size:34px; display:block; margin-bottom:8px;}
+  .asset-card{
+    display:flex;
+    gap:12px;
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-left:5px solid var(--muted);
+    border-radius:var(--radius);
+    padding:10px;
+    margin-bottom:10px;
+    box-shadow:var(--shadow);
+    cursor:pointer;
+    align-items:center;
+  }
+  .card-thumb{
+    width:56px; height:56px;
+    border-radius:8px;
+    object-fit:cover;
+    flex:none;
+    background:var(--bg);
+  }
+  .card-thumb-placeholder{
+    display:flex; align-items:center; justify-content:center;
+    font-size:24px;
+  }
+  .card-info{flex:1; min-width:0;}
+  .card-title{font-weight:700; font-size:15px; margin-bottom:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .card-sub{font-size:12px; color:var(--muted); letter-spacing:.02em;}
+  .card-loc{font-size:12px; color:var(--muted); margin-top:2px; font-family:ui-monospace,"SF Mono","Roboto Mono",Menlo,monospace; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .card-status{
+    flex:none;
+    font-size:11px;
+    font-weight:700;
+    padding:4px 8px;
+    border-radius:6px;
+    text-transform:uppercase;
+    letter-spacing:.03em;
+  }
+
+  /* ---------- FAB ---------- */
+  .fab{
+    position:fixed; right:18px; bottom:22px; z-index:25;
+    width:58px; height:58px;
+    border-radius:50%;
+    background:var(--teal);
+    color:#fff;
+    border:none;
+    font-size:28px;
+    box-shadow:0 4px 14px rgba(10,60,70,.35);
+    cursor:pointer;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .fab:active{background:var(--teal-deep);}
+
+  /* ---------- Toast ---------- */
+  #toast{
+    position:fixed; left:50%; bottom:24px; transform:translate(-50%,20px);
+    background:var(--ink); color:#fff;
+    padding:10px 18px; border-radius:24px;
+    font-size:13px;
+    opacity:0; pointer-events:none;
+    transition:opacity .2s, transform .2s;
+    z-index:60;
+    box-shadow:0 4px 14px rgba(0,0,0,.25);
+  }
+  #toast.show{opacity:1; transform:translate(-50%,0);}
+
+  /* ---------- Modals ---------- */
+  .modal{
+    position:fixed; inset:0; z-index:50;
+    background:rgba(10,25,28,.55);
+    display:flex; align-items:flex-end;
+  }
+  .modal.hidden{display:none;}
+  .modal-sheet{
+    background:var(--surface);
+    width:100%;
+    max-height:92vh;
+    border-radius:16px 16px 0 0;
+    overflow-y:auto;
+    padding:18px 18px calc(18px + env(safe-area-inset-bottom));
+  }
+  .modal-head{
+    display:flex; align-items:center; justify-content:space-between;
+    margin-bottom:14px;
+  }
+  .modal-head h2{margin:0; font-size:17px; font-weight:800;}
+  .modal-close{
+    background:var(--bg); border:none; width:32px; height:32px;
+    border-radius:50%; font-size:16px; cursor:pointer; color:var(--muted);
+  }
+
+  /* ---------- Form ---------- */
+  .field{margin-bottom:14px;}
+  .field label{
+    display:block;
+    font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase;
+    color:var(--muted); margin-bottom:6px;
+  }
+  .field input, .field select, .field textarea{
+    width:100%;
+    padding:11px 12px;
+    border:1px solid var(--border);
+    border-radius:8px;
+    background:var(--bg);
+    color:var(--ink);
+  }
+  .field textarea{resize:vertical; min-height:64px;}
+  .row-2{display:grid; grid-template-columns:1fr 1fr; gap:10px;}
+  .gps-row{display:flex; gap:8px; align-items:center;}
+  .btn{
+    padding:11px 16px;
+    border-radius:8px;
+    border:1px solid var(--border);
+    background:var(--surface);
+    font-weight:700;
+    font-size:14px;
+    cursor:pointer;
+    color:var(--ink);
+  }
+  .btn-primary{background:var(--teal); color:#fff; border-color:var(--teal);}
+  .btn-primary:disabled{opacity:.6;}
+  .btn-danger{background:#fff; color:var(--red); border-color:var(--red);}
+  .btn-block{width:100%;}
+  .gps-display{font-size:12px; color:var(--teal); font-family:ui-monospace,"SF Mono","Roboto Mono",Menlo,monospace;}
+  .form-actions{display:flex; gap:10px; margin-top:18px;}
+  .form-actions .btn{flex:1;}
+
+  .photo-input-row{display:flex; gap:10px; flex-wrap:wrap; margin-top:8px;}
+  .photo-thumb{position:relative; width:72px; height:72px;}
+  .photo-thumb img{width:100%; height:100%; object-fit:cover; border-radius:8px; border:1px solid var(--border);}
+  .photo-thumb button{
+    position:absolute; top:-6px; right:-6px;
+    width:22px; height:22px; border-radius:50%;
+    background:var(--red); color:#fff; border:2px solid var(--surface);
+    font-size:11px; line-height:1; cursor:pointer;
+  }
+  .add-photo-btn{
+    width:72px; height:72px;
+    border:2px dashed var(--border);
+    border-radius:8px;
+    background:var(--bg);
+    color:var(--muted);
+    font-size:22px;
+    cursor:pointer;
+  }
+
+  /* ---------- Detail ---------- */
+  .detail-photos{display:flex; gap:8px; overflow-x:auto; margin-bottom:14px;}
+  .detail-photos img{width:96px; height:96px; object-fit:cover; border-radius:8px; flex:none; cursor:pointer;}
+  .detail-status-bar{height:5px; border-radius:4px; margin-bottom:14px;}
+  .detail-name{font-size:20px; font-weight:800; margin:0 0 4px;}
+  .detail-badge{
+    display:inline-block; font-size:11px; font-weight:700; text-transform:uppercase;
+    letter-spacing:.04em; padding:4px 10px; border-radius:6px; margin-bottom:14px;
+  }
+  dl.detail-fields{margin:0;}
+  dl.detail-fields dt{
+    font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.06em;
+    color:var(--muted); margin-top:12px;
+  }
+  dl.detail-fields dd{margin:3px 0 0; font-size:14.5px; line-height:1.45;}
+  .detail-actions{display:flex; gap:10px; margin-top:20px;}
+  .detail-actions .btn{flex:1;}
+
+  /* ---------- Lightbox ---------- */
+  #lightbox{
+    position:fixed; inset:0; z-index:70; background:rgba(0,0,0,.92);
+    display:flex; align-items:center; justify-content:center;
+  }
+  #lightbox.hidden{display:none;}
+  #lightbox img{max-width:94vw; max-height:78vh; object-fit:contain;}
+  .lb-close{position:absolute; top:18px; right:18px; background:rgba(255,255,255,.15); border:none; color:#fff; width:38px; height:38px; border-radius:50%; font-size:18px;}
+  .lb-nav{position:absolute; top:50%; transform:translateY(-50%); background:rgba(255,255,255,.15); border:none; color:#fff; width:44px; height:44px; border-radius:50%; font-size:20px;}
+  .lb-prev{left:12px;} .lb-next{right:12px;}
+
+  #importFileInput{display:none;}
+
+  .config-screen{padding:28px 20px; text-align:left;}
+  .config-screen h2{font-size:16px; margin:0 0 10px;}
+  .config-screen p{font-size:14px; line-height:1.6; color:var(--muted); margin:0;}
+
+  @media (prefers-reduced-motion: reduce){
+    *{transition:none !important; animation:none !important;}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="title-row">
+    <div>
+      <h1>Oqava Suv Inshootlari</h1>
+      <div class="sub">Aktivlar bazasi · <span id="connBadge">—</span></div>
+    </div>
+    <div class="header-actions">
+      <button class="icon-btn" id="btnExport" title="Zaxira nusxa">⬇</button>
+      <button class="icon-btn" id="btnImport" title="Tiklash">⬆</button>
+    </div>
+  </div>
+  <div class="stats-row" id="statsRow"></div>
+</header>
+
+<div class="filters">
+  <div class="chips" id="categoryChips"></div>
+  <div class="search-row">
+    <input type="search" id="searchInput" placeholder="Qidirish: nomi, joyi...">
+    <select id="statusFilter">
+      <option value="all">Holati: barchasi</option>
+      <option value="ishlayapti">Ishlayapti</option>
+      <option value="tamirda">Ta'mirda</option>
+      <option value="nosoz">Nosoz</option>
+    </select>
+  </div>
+</div>
+
+<main id="assetList">
+  <div class="empty-state">Yuklanmoqda...</div>
+</main>
+
+<button class="fab" id="fabAdd" title="Yangi obyekt">+</button>
+<input type="file" id="importFileInput" accept="application/json">
+
+<!-- Form Modal -->
+<div class="modal hidden" id="formModal">
+  <div class="modal-sheet">
+    <div class="modal-head">
+      <h2 id="formTitle">Yangi obyekt qo'shish</h2>
+      <button class="modal-close" id="btnCloseForm">✕</button>
+    </div>
+    <form id="assetForm">
+      <div class="field">
+        <label>Kategoriya</label>
+        <select id="fCategory"></select>
+      </div>
+      <div class="field">
+        <label>Turi</label>
+        <select id="fSubtype"></select>
+      </div>
+      <div class="field">
+        <label>Nomi / raqami</label>
+        <input type="text" id="fName" placeholder="Masalan: KNS-4, Aerotenk-2" required>
+      </div>
+      <div class="field">
+        <label>Joylashuvi</label>
+        <input type="text" id="fLocation" placeholder="Manzil yoki mo'ljal">
+        <div class="gps-row" style="margin-top:8px;">
+          <button type="button" class="btn" id="btnGPS">📍 GPS olish</button>
+          <span class="gps-display" id="gpsDisplay"></span>
+        </div>
+      </div>
+      <div class="row-2">
+        <div class="field">
+          <label>O'rnatilgan sana</label>
+          <input type="date" id="fInstallDate">
+        </div>
+        <div class="field">
+          <label>Holati</label>
+          <select id="fStatus">
+            <option value="ishlayapti">Ishlayapti</option>
+            <option value="tamirda">Ta'mirda</option>
+            <option value="nosoz">Nosoz</option>
+          </select>
+        </div>
+      </div>
+      <div class="field">
+        <label>Oxirgi ta'mirlash sanasi</label>
+        <input type="date" id="fLastRepair">
+      </div>
+      <div class="field">
+        <label>Texnik xususiyatlari</label>
+        <textarea id="fSpecs" placeholder="Quvvati, o'lchami, rusumi va h.k."></textarea>
+      </div>
+      <div class="field">
+        <label>Izoh</label>
+        <textarea id="fNotes"></textarea>
+      </div>
+      <div class="field">
+        <label>Rasmlar</label>
+        <div class="photo-input-row" id="fPhotoPreviews"></div>
+        <button type="button" class="add-photo-btn" id="btnAddPhoto" style="margin-top:8px;">📷</button>
+        <input type="file" id="fPhotoInput" accept="image/*" multiple style="display:none;">
+      </div>
+      <div class="form-actions">
+        <button type="button" class="btn" id="btnCancelForm">Bekor qilish</button>
+        <button type="submit" class="btn btn-primary" id="btnSaveForm">Saqlash</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Detail Modal -->
+<div class="modal hidden" id="detailModal">
+  <div class="modal-sheet">
+    <div class="modal-head">
+      <h2>Obyekt ma'lumoti</h2>
+      <button class="modal-close" id="btnCloseDetail">✕</button>
+    </div>
+    <div id="detailContent"></div>
+    <div class="detail-actions">
+      <button class="btn btn-danger" id="btnDeleteDetail">O'chirish</button>
+      <button class="btn btn-primary" id="btnEditDetail">Tahrirlash</button>
+    </div>
+  </div>
+</div>
+
+<!-- Lightbox -->
+<div class="modal hidden" id="lightbox">
+  <button class="lb-close" id="lbClose">✕</button>
+  <button class="lb-nav lb-prev" id="lbPrev">‹</button>
+  <img id="lightboxImg" src="" alt="">
+  <button class="lb-nav lb-next" id="lbNext">›</button>
+</div>
+
+<div id="toast"></div>
+
+<script type="module">
+"use strict";
+
+/* ======================================================================
+   FIREBASE ULANISH
+   Manba: firebase.google.com/docs/web/setup (modular SDK, CDN import)
+   ====================================================================== */
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.17.1/firebase-app.js';
+import {
+  initializeFirestore, persistentLocalCache, persistentSingleTabManager,
+  collection, doc, setDoc, deleteDoc, onSnapshot
+} from 'https://www.gstatic.com/firebasejs/12.17.1/firebase-firestore.js';
+
+/* ======================================================================
+   BU YERGA FIREBASE SOZLAMALARINGIZNI JOYLASHTIRING
+   Firebase Console > Project settings > Your apps > SDK setup and configuration
+   ====================================================================== */
+const firebaseConfig = {
+  apiKey: "AIzaSyBFrf1EgJ5tLDZBwqamwmzKzeiQ1Wjr2D0",
+  authDomain: "kanalizatsiya-bazasi.firebaseapp.com",
+  projectId: "kanalizatsiya-bazasi",
+  storageBucket: "kanalizatsiya-bazasi.firebasestorage.app",
+  messagingSenderId: "195959661838",
+  appId: "1:195959661838:web:d9c5e32bff7dbfddb4635f"
+};
+
+var isConfigured = !!(firebaseConfig.apiKey && firebaseConfig.apiKey.indexOf('BU_YERGA') === -1);
+var db = null;
+var assetsCollection = null;
+
+if (isConfigured){
+  try{
+    var fbApp = initializeApp(firebaseConfig);
+    try{
+      db = initializeFirestore(fbApp, {
+        localCache: persistentLocalCache({ tabManager: persistentSingleTabManager() })
+      });
+    } catch(persistErr){
+      console.warn('Lokal keshsiz rejimda ishlayapti', persistErr);
+      db = initializeFirestore(fbApp, {});
+    }
+    assetsCollection = collection(db, 'assets');
+  } catch(initErr){
+    console.error('Firebase init xatosi', initErr);
+    db = null;
+  }
+}
+
+(function(){
+
+  /* ================= Data definitions ================= */
+  var CATEGORIES = [
+    { id:'tozalash', name:"Tozalash inshootlari", icon:'🏭', color:'#0F6B7A',
+      subtypes:["Panjara/g'alvir","Qum ushlagich","Birlamchi cho'ktirgich","Ikkilamchi cho'ktirgich","Aerotenk","Dezinfeksiya bloki","Loyqa maydonchasi","Metantenk","Boshqa"] },
+    { id:'kns', name:"Nasos stansiyalari (KNS)", icon:'⚙️', color:'#1D4ED8',
+      subtypes:["Nasos","Boshqaruv shkafi","Zaxira generator","Boshqa"] },
+    { id:'tarmoq', name:"Tarmoq va quduqlar", icon:'🕳️', color:'#7C3AED',
+      subtypes:["Kollektor","Nazorat quduq","Aylanma quduq","Boshqa"] },
+    { id:'nazorat', name:"Nazorat-o'lchov asboblari", icon:'📊', color:'#C2410C',
+      subtypes:["Debitomer","Sifat sensori","SCADA","Boshqa"] },
+    { id:'qoshimcha', name:"Qo'shimcha obyektlar", icon:'🏢', color:'#4D7C0F',
+      subtypes:["Laboratoriya","Ombor","Ma'muriy bino","Boshqa"] }
+  ];
+  var STATUSES = [
+    { id:'ishlayapti', name:'Ishlayapti', color:'#1F9254' },
+    { id:'tamirda', name:"Ta'mirda", color:'#D97706' },
+    { id:'nosoz', name:'Nosoz', color:'#D6493F' }
+  ];
+
+  function getCategory(id){ for (var i=0;i<CATEGORIES.length;i++){ if (CATEGORIES[i].id===id) return CATEGORIES[i]; } return null; }
+  function getStatus(id){ for (var i=0;i<STATUSES.length;i++){ if (STATUSES[i].id===id) return STATUSES[i]; } return null; }
+
+  /* ================= App state ================= */
+  var assets = [];
+  var currentFilter = { category:'all', status:'all', search:'' };
+  var editingId = null;
+  var formPhotos = [];
+  var formLat = null, formLng = null;
+  var currentDetailId = null;
+  var lightboxPhotos = [];
+  var lightboxIndex = 0;
+
+  function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,8); }
+  function escapeHtml(str){
+    var div = document.createElement('div');
+    div.textContent = (str === undefined || str === null) ? '' : String(str);
+    return div.innerHTML;
+  }
+  function showToast(msg){
+    var t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    clearTimeout(t._timer);
+    t._timer = setTimeout(function(){ t.classList.remove('show'); }, 2400);
+  }
+
+  /* ================= Firestore data layer ================= */
+  function saveAssetToDb(asset){
+    if (!db) return Promise.resolve(false);
+    return setDoc(doc(assetsCollection, asset.id), asset)
+      .then(function(){ return true; })
+      .catch(function(err){ console.error('Saqlash xatosi', err); return false; });
+  }
+  function deleteAssetFromDb(id){
+    if (!db) return Promise.resolve(false);
+    return deleteDoc(doc(assetsCollection, id))
+      .then(function(){ return true; })
+      .catch(function(err){ console.error("O'chirish xatosi", err); return false; });
+  }
+  function updateConnBadge(fromCache){
+    var el = document.getElementById('connBadge');
+    if (!el) return;
+    if (fromCache){ el.textContent = '🟡 offlayn (lokal)'; el.style.color = '#FFD166'; }
+    else { el.textContent = '🟢 onlayn'; el.style.color = '#8FE3C7'; }
+  }
+  function startListening(){
+    if (!db){
+      document.getElementById('assetList').innerHTML = '<div class="empty-state">⚠️ Bazaga ulanmadi. firebaseConfig sozlamalarini tekshiring.</div>';
+      return;
+    }
+    onSnapshot(assetsCollection, function(snapshot){
+      assets = snapshot.docs.map(function(d){ return d.data(); })
+        .sort(function(a,b){ return (b.updatedAt||0) - (a.updatedAt||0); });
+      updateConnBadge(snapshot.metadata.fromCache);
+      renderStats();
+      renderList();
+    }, function(err){
+      console.error('Tinglashda xatolik', err);
+      document.getElementById('assetList').innerHTML = '<div class="empty-state">⚠️ Ma\'lumot olishda xatolik.<br>Firestore qoidalarini (Rules) tekshiring.</div>';
+    });
+  }
+
+  /* ================= Rendering ================= */
+  function renderStats(){
+    var el = document.getElementById('statsRow');
+    var counts = {};
+    STATUSES.forEach(function(s){ counts[s.id] = 0; });
+    assets.forEach(function(a){ if (counts[a.status] !== undefined) counts[a.status]++; });
+    var html = '<div class="stat-chip">JAMI <b>' + assets.length + '</b></div>';
+    STATUSES.forEach(function(s){
+      html += '<div class="stat-chip" style="color:' + s.color + '">' + s.name.toUpperCase() + ' <b>' + counts[s.id] + '</b></div>';
+    });
+    el.innerHTML = html;
+  }
+
+  function renderCategoryChips(){
+    var el = document.getElementById('categoryChips');
+    var html = '<button class="chip active" data-cat="all">Barchasi</button>';
+    CATEGORIES.forEach(function(c){
+      html += '<button class="chip" data-cat="' + c.id + '">' + c.icon + ' ' + escapeHtml(c.name) + '</button>';
+    });
+    el.innerHTML = html;
+    Array.prototype.forEach.call(el.querySelectorAll('.chip'), function(btn){
+      btn.addEventListener('click', function(){
+        Array.prototype.forEach.call(el.querySelectorAll('.chip'), function(b){ b.classList.remove('active'); });
+        btn.classList.add('active');
+        currentFilter.category = btn.getAttribute('data-cat');
+        renderList();
+      });
+    });
+  }
+
+  function getFilteredAssets(){
+    return assets.filter(function(a){
+      if (currentFilter.category !== 'all' && a.category !== currentFilter.category) return false;
+      if (currentFilter.status !== 'all' && a.status !== currentFilter.status) return false;
+      if (currentFilter.search){
+        var q = currentFilter.search.toLowerCase();
+        var hay = ((a.name||'') + ' ' + (a.location||'') + ' ' + (a.subtype||'')).toLowerCase();
+        if (hay.indexOf(q) === -1) return false;
+      }
+      return true;
+    });
+  }
+
+  function renderCard(a){
+    var cat = getCategory(a.category) || {};
+    var status = getStatus(a.status) || {};
+    var thumb;
+    if (a.photos && a.photos.length){
+      thumb = '<img class="card-thumb" src="' + a.photos[0] + '" alt="">';
+    } else {
+      thumb = '<div class="card-thumb card-thumb-placeholder" style="background:' + (cat.color||'#ccc') + '22">' + (cat.icon||'📦') + '</div>';
+    }
+    return (
+      '<div class="asset-card" style="border-left-color:' + (status.color||'#ccc') + '" data-id="' + a.id + '">' +
+        thumb +
+        '<div class="card-info">' +
+          '<div class="card-title">' + escapeHtml(a.name || 'Nomsiz') + '</div>' +
+          '<div class="card-sub">' + escapeHtml(cat.name||'') + (a.subtype ? ' • ' + escapeHtml(a.subtype) : '') + '</div>' +
+          (a.location ? '<div class="card-loc">📍 ' + escapeHtml(a.location) + '</div>' : '') +
+        '</div>' +
+        '<div class="card-status" style="background:' + (status.color||'#ccc') + '22;color:' + (status.color||'#666') + '">' + escapeHtml(status.name||'') + '</div>' +
+      '</div>'
+    );
+  }
+
+  function renderList(){
+    var container = document.getElementById('assetList');
+    if (assets.length === 0){
+      container.innerHTML = '<div class="empty-state"><span class="big">🚰</span>Hali obyekt qo\'shilmagan.<br>Boshlash uchun pastdagi + tugmasini bosing.</div>';
+      return;
+    }
+    var filtered = getFilteredAssets();
+    if (filtered.length === 0){
+      container.innerHTML = '<div class="empty-state"><span class="big">🔍</span>Hech narsa topilmadi.</div>';
+      return;
+    }
+    container.innerHTML = filtered.map(renderCard).join('');
+    Array.prototype.forEach.call(container.querySelectorAll('.asset-card'), function(card){
+      card.addEventListener('click', function(){ openDetail(card.getAttribute('data-id')); });
+    });
+  }
+
+  /* ================= Form: category/subtype ================= */
+  function populateFormCategories(){
+    var sel = document.getElementById('fCategory');
+    sel.innerHTML = CATEGORIES.map(function(c){ return '<option value="' + c.id + '">' + c.icon + ' ' + escapeHtml(c.name) + '</option>'; }).join('');
+  }
+  function populateSubtypes(categoryId, selected){
+    var cat = getCategory(categoryId);
+    var sel = document.getElementById('fSubtype');
+    var list = cat ? cat.subtypes : [];
+    sel.innerHTML = list.map(function(st){ return '<option value="' + escapeHtml(st) + '">' + escapeHtml(st) + '</option>'; }).join('');
+    if (selected){ sel.value = selected; }
+  }
+
+  /* ================= Photo handling ================= */
+  function compressImage(file, maxWidth, quality){
+    maxWidth = maxWidth || 900;
+    quality = quality || 0.5;
+    return new Promise(function(resolve, reject){
+      var reader = new FileReader();
+      reader.onload = function(e){
+        var img = new Image();
+        img.onload = function(){
+          var w = img.width, h = img.height;
+          if (w > maxWidth){ h = Math.round(h * (maxWidth / w)); w = maxWidth; }
+          var canvas = document.createElement('canvas');
+          canvas.width = w; canvas.height = h;
+          var ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, w, h);
+          resolve(canvas.toDataURL('image/jpeg', quality));
+        };
+        img.onerror = function(){ reject(new Error('image load failed')); };
+        img.src = e.target.result;
+      };
+      reader.onerror = function(){ reject(new Error('file read failed')); };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function renderFormPhotos(){
+    var c = document.getElementById('fPhotoPreviews');
+    c.innerHTML = formPhotos.map(function(p, i){
+      return '<div class="photo-thumb"><img src="' + p + '"><button type="button" data-idx="' + i + '">✕</button></div>';
+    }).join('');
+    Array.prototype.forEach.call(c.querySelectorAll('button'), function(btn){
+      btn.addEventListener('click', function(){
+        formPhotos.splice(parseInt(btn.getAttribute('data-idx'), 10), 1);
+        renderFormPhotos();
+      });
+    });
+  }
+
+  function handlePhotoFiles(fileList){
+    var files = Array.prototype.slice.call(fileList).filter(function(f){ return f.type.indexOf('image/') === 0; });
+    if (!files.length) return;
+    showToast('Rasm qayta ishlanmoqda...');
+    var chain = Promise.resolve();
+    files.forEach(function(file){
+      chain = chain.then(function(){
+        return compressImage(file).then(function(dataUrl){ formPhotos.push(dataUrl); renderFormPhotos(); });
+      }).catch(function(err){ console.error('photo error', err); });
+    });
+    chain.then(function(){ showToast('Rasm(lar) qo\'shildi'); });
+  }
+
+  /* ================= GPS ================= */
+  function captureGPS(){
+    if (!navigator.geolocation){ showToast('Bu qurilmada GPS mavjud emas'); return; }
+    var btn = document.getElementById('btnGPS');
+    var original = btn.textContent;
+    btn.textContent = 'Aniqlanmoqda...';
+    navigator.geolocation.getCurrentPosition(
+      function(pos){
+        formLat = pos.coords.latitude;
+        formLng = pos.coords.longitude;
+        document.getElementById('gpsDisplay').textContent = '📍 ' + formLat.toFixed(6) + ', ' + formLng.toFixed(6);
+        btn.textContent = 'GPS ni qayta olish';
+      },
+      function(){
+        showToast("GPS: joylashuvni aniqlab bo'lmadi");
+        btn.textContent = original;
+      },
+      { enableHighAccuracy:true, timeout:10000 }
+    );
+  }
+
+  /* ================= Form open/close/submit ================= */
+  function openAddForm(){
+    editingId = null;
+    formPhotos = [];
+    formLat = null; formLng = null;
+    document.getElementById('formTitle').textContent = "Yangi obyekt qo'shish";
+    document.getElementById('assetForm').reset();
+    populateSubtypes(CATEGORIES[0].id);
+    document.getElementById('fStatus').value = 'ishlayapti';
+    document.getElementById('gpsDisplay').textContent = '';
+    document.getElementById('btnGPS').textContent = '📍 GPS olish';
+    renderFormPhotos();
+    document.getElementById('formModal').classList.remove('hidden');
+  }
+
+  function openEditForm(id){
+    var a = assets.filter(function(x){ return x.id === id; })[0];
+    if (!a) return;
+    editingId = id;
+    formPhotos = (a.photos || []).slice();
+    formLat = (typeof a.lat === 'number') ? a.lat : null;
+    formLng = (typeof a.lng === 'number') ? a.lng : null;
+    document.getElementById('formTitle').textContent = 'Obyektni tahrirlash';
+    document.getElementById('fCategory').value = a.category;
+    populateSubtypes(a.category, a.subtype);
+    document.getElementById('fName').value = a.name || '';
+    document.getElementById('fLocation').value = a.location || '';
+    document.getElementById('fInstallDate').value = a.installDate || '';
+    document.getElementById('fStatus').value = a.status || 'ishlayapti';
+    document.getElementById('fLastRepair').value = a.lastRepairDate || '';
+    document.getElementById('fSpecs').value = a.specs || '';
+    document.getElementById('fNotes').value = a.notes || '';
+    document.getElementById('gpsDisplay').textContent = (formLat && formLng) ? ('📍 ' + formLat.toFixed(6) + ', ' + formLng.toFixed(6)) : '';
+    document.getElementById('btnGPS').textContent = '📍 GPS olish';
+    renderFormPhotos();
+    closeDetail();
+    document.getElementById('formModal').classList.remove('hidden');
+  }
+
+  function closeForm(){ document.getElementById('formModal').classList.add('hidden'); }
+
+  function handleFormSubmit(e){
+    e.preventDefault();
+    var name = document.getElementById('fName').value.trim();
+    if (!name){ showToast('Nomini kiriting'); return; }
+    var existing = editingId ? assets.filter(function(x){ return x.id === editingId; })[0] : null;
+    var asset = {
+      id: editingId || uid(),
+      category: document.getElementById('fCategory').value,
+      subtype: document.getElementById('fSubtype').value,
+      name: name,
+      location: document.getElementById('fLocation').value.trim(),
+      lat: formLat, lng: formLng,
+      installDate: document.getElementById('fInstallDate').value,
+      status: document.getElementById('fStatus').value,
+      lastRepairDate: document.getElementById('fLastRepair').value,
+      specs: document.getElementById('fSpecs').value.trim(),
+      notes: document.getElementById('fNotes').value.trim(),
+      photos: formPhotos.slice(),
+      createdAt: existing ? (existing.createdAt || Date.now()) : Date.now(),
+      updatedAt: Date.now()
+    };
+
+    var approxSize = JSON.stringify(asset).length;
+    if (approxSize > 900000){
+      showToast("Rasmlar juda katta (limit ~900KB). Birortasini o'chiring.");
+      return;
+    }
+
+    var saveBtn = document.getElementById('btnSaveForm');
+    saveBtn.disabled = true; saveBtn.textContent = 'Saqlanmoqda...';
+    saveAssetToDb(asset).then(function(ok){
+      saveBtn.disabled = false; saveBtn.textContent = 'Saqlash';
+      if (!ok){ showToast('Saqlashda xatolik yuz berdi'); return; }
+      closeForm();
+      showToast(editingId ? 'Yangilandi' : "Qo'shildi");
+    });
+  }
+
+  /* ================= Detail ================= */
+  function openDetail(id){
+    var a = assets.filter(function(x){ return x.id === id; })[0];
+    if (!a) return;
+    currentDetailId = id;
+    var cat = getCategory(a.category) || {};
+    var status = getStatus(a.status) || {};
+    var html = '';
+    html += '<div class="detail-status-bar" style="background:' + (status.color||'#ccc') + '"></div>';
+    if (a.photos && a.photos.length){
+      html += '<div class="detail-photos">' + a.photos.map(function(p,i){ return '<img data-idx="' + i + '" src="' + p + '">'; }).join('') + '</div>';
+    }
+    html += '<div class="detail-name">' + escapeHtml(a.name) + '</div>';
+    html += '<div class="detail-badge" style="background:' + (status.color||'#ccc') + '22;color:' + (status.color||'#666') + '">' + escapeHtml(status.name||'') + '</div>';
+    html += '<dl class="detail-fields">';
+    html += '<dt>Kategoriya</dt><dd>' + (cat.icon||'') + ' ' + escapeHtml(cat.name||'') + (a.subtype ? ' • ' + escapeHtml(a.subtype) : '') + '</dd>';
+    if (a.location){
+      html += '<dt>Joylashuvi</dt><dd>📍 ' + escapeHtml(a.location);
+      if (typeof a.lat === 'number' && typeof a.lng === 'number'){
+        html += ' — <a href="https://maps.google.com/?q=' + a.lat + ',' + a.lng + '" target="_blank" rel="noopener">xaritada ko\'rish</a>';
+      }
+      html += '</dd>';
+    }
+    if (a.installDate) html += "<dt>O'rnatilgan sana</dt><dd>" + escapeHtml(a.installDate) + '</dd>';
+    if (a.lastRepairDate) html += "<dt>Oxirgi ta'mirlash</dt><dd>" + escapeHtml(a.lastRepairDate) + '</dd>';
+    if (a.specs) html += '<dt>Texnik xususiyatlari</dt><dd>' + escapeHtml(a.specs) + '</dd>';
+    if (a.notes) html += '<dt>Izoh</dt><dd>' + escapeHtml(a.notes) + '</dd>';
+    html += '</dl>';
+    document.getElementById('detailContent').innerHTML = html;
+    Array.prototype.forEach.call(document.querySelectorAll('.detail-photos img'), function(img){
+      img.addEventListener('click', function(){ openLightbox(a.photos, parseInt(img.getAttribute('data-idx'),10)); });
+    });
+    document.getElementById('detailModal').classList.remove('hidden');
+  }
+  function closeDetail(){ document.getElementById('detailModal').classList.add('hidden'); }
+
+  function confirmDeleteCurrent(){
+    if (!currentDetailId) return;
+    if (!confirm("Bu obyektni o'chirishni tasdiqlaysizmi? Bu amalni bekor qilib bo'lmaydi.")) return;
+    var id = currentDetailId;
+    deleteAssetFromDb(id).then(function(ok){
+      closeDetail();
+      showToast(ok ? "O'chirildi" : "O'chirishda xatolik");
+    });
+  }
+
+  /* ================= Lightbox ================= */
+  function openLightbox(photos, idx){
+    lightboxPhotos = photos || [];
+    lightboxIndex = idx || 0;
+    renderLightbox();
+    document.getElementById('lightbox').classList.remove('hidden');
+  }
+  function renderLightbox(){
+    document.getElementById('lightboxImg').src = lightboxPhotos[lightboxIndex] || '';
+  }
+  function lightboxNav(dir){
+    if (!lightboxPhotos.length) return;
+    lightboxIndex = (lightboxIndex + dir + lightboxPhotos.length) % lightboxPhotos.length;
+    renderLightbox();
+  }
+
+  /* ================= Export / Import ================= */
+  function exportData(){
+    var data = { exportedAt: new Date().toISOString(), assets: assets };
+    var blob = new Blob([JSON.stringify(data)], { type:'application/json' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = 'oqava-inshootlari-zaxira-' + new Date().toISOString().slice(0,10) + '.json';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
+    showToast('Zaxira fayli yuklab olindi');
+  }
+
+  function importDataFile(file){
+    var reader = new FileReader();
+    reader.onload = function(e){
+      var data;
+      try { data = JSON.parse(e.target.result); }
+      catch(err){ showToast('Fayl formatida xatolik'); return; }
+      var list = Array.isArray(data.assets) ? data.assets : (Array.isArray(data) ? data : null);
+      if (!list){ showToast('Fayl formatida xatolik'); return; }
+      showToast('Import qilinmoqda...');
+      var chain = Promise.resolve();
+      var count = 0;
+      list.forEach(function(a){
+        chain = chain.then(function(){
+          var newAsset = {
+            id: uid(),
+            category: a.category || CATEGORIES[0].id,
+            subtype: a.subtype || '',
+            name: a.name || 'Nomsiz',
+            location: a.location || '',
+            lat: (typeof a.lat === 'number') ? a.lat : null,
+            lng: (typeof a.lng === 'number') ? a.lng : null,
+            installDate: a.installDate || '',
+            status: a.status || 'ishlayapti',
+            lastRepairDate: a.lastRepairDate || '',
+            specs: a.specs || '',
+            notes: a.notes || '',
+            photos: Array.isArray(a.photos) ? a.photos : [],
+            createdAt: a.createdAt || Date.now(),
+            updatedAt: Date.now()
+          };
+          return saveAssetToDb(newAsset).then(function(){ count++; });
+        });
+      });
+      chain.then(function(){ showToast(count + " ta obyekt qo'shildi"); });
+    };
+    reader.readAsText(file);
+  }
+
+  /* ================= Wire up events ================= */
+  function attachEvents(){
+    document.getElementById('fabAdd').addEventListener('click', openAddForm);
+    document.getElementById('btnCloseForm').addEventListener('click', closeForm);
+    document.getElementById('btnCancelForm').addEventListener('click', closeForm);
+    document.getElementById('formModal').addEventListener('click', function(e){ if (e.target.id === 'formModal') closeForm(); });
+    document.getElementById('assetForm').addEventListener('submit', handleFormSubmit);
+    document.getElementById('fCategory').addEventListener('change', function(){ populateSubtypes(this.value); });
+    document.getElementById('btnGPS').addEventListener('click', captureGPS);
+    document.getElementById('btnAddPhoto').addEventListener('click', function(){ document.getElementById('fPhotoInput').click(); });
+    document.getElementById('fPhotoInput').addEventListener('change', function(e){ handlePhotoFiles(e.target.files); e.target.value=''; });
+
+    document.getElementById('btnCloseDetail').addEventListener('click', closeDetail);
+    document.getElementById('detailModal').addEventListener('click', function(e){ if (e.target.id === 'detailModal') closeDetail(); });
+    document.getElementById('btnDeleteDetail').addEventListener('click', confirmDeleteCurrent);
+    document.getElementById('btnEditDetail').addEventListener('click', function(){ openEditForm(currentDetailId); });
+
+    document.getElementById('lbClose').addEventListener('click', function(){ document.getElementById('lightbox').classList.add('hidden'); });
+    document.getElementById('lightbox').addEventListener('click', function(e){ if (e.target.id === 'lightbox') document.getElementById('lightbox').classList.add('hidden'); });
+    document.getElementById('lbPrev').addEventListener('click', function(){ lightboxNav(-1); });
+    document.getElementById('lbNext').addEventListener('click', function(){ lightboxNav(1); });
+
+    var searchTimer;
+    document.getElementById('searchInput').addEventListener('input', function(e){
+      clearTimeout(searchTimer);
+      var val = e.target.value;
+      searchTimer = setTimeout(function(){ currentFilter.search = val; renderList(); }, 200);
+    });
+    document.getElementById('statusFilter').addEventListener('change', function(e){
+      currentFilter.status = e.target.value;
+      renderList();
+    });
+
+    document.getElementById('btnExport').addEventListener('click', exportData);
+    document.getElementById('btnImport').addEventListener('click', function(){ document.getElementById('importFileInput').click(); });
+    document.getElementById('importFileInput').addEventListener('change', function(e){
+      if (e.target.files && e.target.files[0]) importDataFile(e.target.files[0]);
+      e.target.value = '';
+    });
+  }
+
+  /* ================= Config-needed screen ================= */
+  function showConfigNeededScreen(){
+    document.getElementById('assetList').innerHTML =
+      '<div class="config-screen">' +
+        '<h2>⚙️ Firebase hali sozlanmagan</h2>' +
+        '<p>Fayl boshidagi <code>firebaseConfig</code> qismiga Firebase loyihangizning kalitlarini joylashtiring, so\'ng faylni saqlang. Qadamlar chatda yozilgan.</p>' +
+      '</div>';
+    document.getElementById('fabAdd').style.display = 'none';
+    document.getElementById('btnExport').style.display = 'none';
+    document.getElementById('btnImport').style.display = 'none';
+    document.getElementById('connBadge').textContent = '⚙️ sozlanmagan';
+  }
+
+  /* ================= Init ================= */
+  function init(){
+    renderCategoryChips();
+    populateFormCategories();
+    attachEvents();
+    if (!isConfigured){
+      showConfigNeededScreen();
+      return;
+    }
+    startListening();
+  }
+
+  init();
+})();
+</script>
+</body>
+</html>
