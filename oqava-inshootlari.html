@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Oqava Suv Inshootlari — Bazasi</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
 <style>
   :root{
     --bg:#EEF2F1;
@@ -275,6 +276,12 @@
   .btn-danger{background:#fff; color:var(--red); border-color:var(--red);}
   .btn-block{width:100%;}
   .gps-display{font-size:12px; color:var(--teal); font-family:ui-monospace,"SF Mono","Roboto Mono",Menlo,monospace;}
+  #locationMap{height:220px; border-radius:8px; margin-top:10px; border:1px solid var(--border); background:var(--bg);}
+  .map-hint{font-size:11px; color:var(--muted); margin-top:6px;}
+  .section-label{
+    font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase;
+    color:var(--teal); margin:18px 0 10px; padding-top:14px; border-top:1px dashed var(--border);
+  }
   .form-actions{display:flex; gap:10px; margin-top:18px;}
   .form-actions .btn{flex:1;}
 
@@ -400,7 +407,10 @@
           <button type="button" class="btn" id="btnGPS">📍 GPS olish</button>
           <span class="gps-display" id="gpsDisplay"></span>
         </div>
+        <div id="locationMap"></div>
+        <div class="map-hint">Xaritada bosing yoki markerni suring — aniq nuqtani belgilash uchun</div>
       </div>
+      <div id="fExtraFields"></div>
       <div class="row-2">
         <div class="field">
           <label>O'rnatilgan sana</label>
@@ -466,6 +476,7 @@
 
 <div id="toast"></div>
 
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 <script type="module">
 "use strict";
 
@@ -519,15 +530,40 @@ if (isConfigured){
   /* ================= Data definitions ================= */
   var CATEGORIES = [
     { id:'tozalash', name:"Tozalash inshootlari", icon:'🏭', color:'#0F6B7A',
-      subtypes:["Panjara/g'alvir","Qum ushlagich","Birlamchi cho'ktirgich","Ikkilamchi cho'ktirgich","Aerotenk","Dezinfeksiya bloki","Loyqa maydonchasi","Metantenk","Boshqa"] },
+      subtypes:["Panjara/g'alvir","Qum ushlagich","Birlamchi cho'ktirgich","Ikkilamchi cho'ktirgich","Aerotenk","Dezinfeksiya bloki","Loyqa maydonchasi","Metantenk","Boshqa"],
+      extraFields:[
+        { key:'capacity', label:'Loyiha quvvati (m³/kun)', type:'number' },
+        { key:'treatmentMethod', label:'Tozalash usuli', type:'text' }
+      ] },
     { id:'kns', name:"Nasos stansiyalari (KNS)", icon:'⚙️', color:'#1D4ED8',
-      subtypes:["Nasos","Boshqaruv shkafi","Zaxira generator","Boshqa"] },
+      subtypes:["Nasos","Boshqaruv shkafi","Zaxira generator","Boshqa"],
+      extraFields:[
+        { key:'pumpCount', label:'Nasoslar soni', type:'number' },
+        { key:'pumpPower', label:'Nasos quvvati (kVt)', type:'number' },
+        { key:'flowRate', label:'Debiti (m³/soat)', type:'number' },
+        { key:'hasGenerator', label:'Zaxira generator', type:'select', options:["Bor","Yo'q"] }
+      ] },
     { id:'tarmoq', name:"Tarmoq va quduqlar", icon:'🕳️', color:'#7C3AED',
-      subtypes:["Kollektor","Nazorat quduq","Aylanma quduq","Boshqa"] },
+      subtypes:["Kollektor","Nazorat quduq","Aylanma quduq","Boshqa"],
+      extraFields:[
+        { key:'lengthKm', label:'Uzunligi (km)', type:'number' },
+        { key:'diameter', label:'Diametri (mm)', type:'number' },
+        { key:'material', label:'Material', type:'select', options:['Chugun',"Plastik (PVX/PE)",'Beton','Asbest','Boshqa'] },
+        { key:'wellDepth', label:'Quduq chuqurligi (m)', type:'number' }
+      ] },
     { id:'nazorat', name:"Nazorat-o'lchov asboblari", icon:'📊', color:'#C2410C',
-      subtypes:["Debitomer","Sifat sensori","SCADA","Boshqa"] },
+      subtypes:["Debitomer","Sifat sensori","SCADA","Boshqa"],
+      extraFields:[
+        { key:'measureRange', label:"O'lchov diapazoni", type:'text' },
+        { key:'accuracy', label:'Aniqlik sinfi', type:'text' },
+        { key:'calibrationDate', label:'Kalibrlash sanasi', type:'date' }
+      ] },
     { id:'qoshimcha', name:"Qo'shimcha obyektlar", icon:'🏢', color:'#4D7C0F',
-      subtypes:["Laboratoriya","Ombor","Ma'muriy bino","Boshqa"] }
+      subtypes:["Laboratoriya","Ombor","Ma'muriy bino","Boshqa"],
+      extraFields:[
+        { key:'area', label:'Maydoni (m²)', type:'number' },
+        { key:'staffCount', label:'Xodimlar soni', type:'number' }
+      ] }
   ];
   var STATUSES = [
     { id:'ishlayapti', name:'Ishlayapti', color:'#1F9254' },
@@ -693,6 +729,35 @@ if (isConfigured){
     if (selected){ sel.value = selected; }
   }
 
+  function renderExtraFieldsInputs(categoryId, values){
+    values = values || {};
+    var cat = getCategory(categoryId);
+    var fields = (cat && cat.extraFields) ? cat.extraFields : [];
+    var container = document.getElementById('fExtraFields');
+    if (!fields.length){ container.innerHTML = ''; return; }
+    var html = '<div class="section-label">' + escapeHtml(cat.name) + ' — xususiyatlari</div>';
+    html += fields.map(function(f){
+      var val = (values[f.key] !== undefined && values[f.key] !== null) ? values[f.key] : '';
+      if (f.type === 'select'){
+        var opts = f.options.map(function(o){
+          return '<option value="' + escapeHtml(o) + '"' + (o === val ? ' selected' : '') + '>' + escapeHtml(o) + '</option>';
+        }).join('');
+        return '<div class="field"><label>' + escapeHtml(f.label) + '</label><select data-ef="' + f.key + '">' + opts + '</select></div>';
+      }
+      var inputType = (f.type === 'number') ? 'number' : (f.type === 'date' ? 'date' : 'text');
+      return '<div class="field"><label>' + escapeHtml(f.label) + '</label><input type="' + inputType + '" data-ef="' + f.key + '" value="' + escapeHtml(val) + '"></div>';
+    }).join('');
+    container.innerHTML = html;
+  }
+
+  function collectExtraFields(){
+    var extra = {};
+    Array.prototype.forEach.call(document.querySelectorAll('#fExtraFields [data-ef]'), function(el){
+      if (el.value) extra[el.getAttribute('data-ef')] = el.value;
+    });
+    return extra;
+  }
+
   /* ================= Photo handling ================= */
   function compressImage(file, maxWidth, quality){
     maxWidth = maxWidth || 900;
@@ -744,6 +809,59 @@ if (isConfigured){
     chain.then(function(){ showToast('Rasm(lar) qo\'shildi'); });
   }
 
+  /* ================= Xaritadan joylashuv tanlash ================= */
+  if (typeof L !== 'undefined'){
+    L.Icon.Default.mergeOptions({
+      iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
+      iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+      shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png'
+    });
+  }
+  var DEFAULT_MAP_CENTER = [41.3111, 69.2797]; // Toshkent atrofi, umumiy boshlanish nuqtasi
+  var pickerMap = null;
+  var pickerMarker = null;
+
+  function setFormLatLng(lat, lng, recenter){
+    formLat = lat; formLng = lng;
+    document.getElementById('gpsDisplay').textContent = '📍 ' + lat.toFixed(6) + ', ' + lng.toFixed(6);
+    if (pickerMap && pickerMarker){
+      pickerMarker.setLatLng([lat, lng]);
+      if (recenter) pickerMap.setView([lat, lng], 16);
+    }
+  }
+
+  function ensurePickerMap(){
+    if (pickerMap || typeof L === 'undefined') return;
+    pickerMap = L.map('locationMap').setView(DEFAULT_MAP_CENTER, 6);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '&copy; OpenStreetMap'
+    }).addTo(pickerMap);
+    pickerMarker = L.marker(DEFAULT_MAP_CENTER, { draggable:true }).addTo(pickerMap);
+    pickerMarker.on('dragend', function(){
+      var pos = pickerMarker.getLatLng();
+      setFormLatLng(pos.lat, pos.lng, false);
+    });
+    pickerMap.on('click', function(e){
+      setFormLatLng(e.latlng.lat, e.latlng.lng, false);
+    });
+  }
+
+  function showPickerAt(lat, lng){
+    ensurePickerMap();
+    if (!pickerMap) return;
+    setTimeout(function(){
+      pickerMap.invalidateSize();
+      if (typeof lat === 'number' && typeof lng === 'number'){
+        pickerMap.setView([lat, lng], 15);
+        pickerMarker.setLatLng([lat, lng]);
+      } else {
+        pickerMap.setView(DEFAULT_MAP_CENTER, 6);
+        pickerMarker.setLatLng(DEFAULT_MAP_CENTER);
+      }
+    }, 60);
+  }
+
   /* ================= GPS ================= */
   function captureGPS(){
     if (!navigator.geolocation){ showToast('Bu qurilmada GPS mavjud emas'); return; }
@@ -752,9 +870,7 @@ if (isConfigured){
     btn.textContent = 'Aniqlanmoqda...';
     navigator.geolocation.getCurrentPosition(
       function(pos){
-        formLat = pos.coords.latitude;
-        formLng = pos.coords.longitude;
-        document.getElementById('gpsDisplay').textContent = '📍 ' + formLat.toFixed(6) + ', ' + formLng.toFixed(6);
+        setFormLatLng(pos.coords.latitude, pos.coords.longitude, true);
         btn.textContent = 'GPS ni qayta olish';
       },
       function(){
@@ -773,11 +889,13 @@ if (isConfigured){
     document.getElementById('formTitle').textContent = "Yangi obyekt qo'shish";
     document.getElementById('assetForm').reset();
     populateSubtypes(CATEGORIES[0].id);
+    renderExtraFieldsInputs(CATEGORIES[0].id);
     document.getElementById('fStatus').value = 'ishlayapti';
     document.getElementById('gpsDisplay').textContent = '';
     document.getElementById('btnGPS').textContent = '📍 GPS olish';
     renderFormPhotos();
     document.getElementById('formModal').classList.remove('hidden');
+    showPickerAt(null, null);
   }
 
   function openEditForm(id){
@@ -790,6 +908,7 @@ if (isConfigured){
     document.getElementById('formTitle').textContent = 'Obyektni tahrirlash';
     document.getElementById('fCategory').value = a.category;
     populateSubtypes(a.category, a.subtype);
+    renderExtraFieldsInputs(a.category, a.extra);
     document.getElementById('fName').value = a.name || '';
     document.getElementById('fLocation').value = a.location || '';
     document.getElementById('fInstallDate').value = a.installDate || '';
@@ -802,6 +921,7 @@ if (isConfigured){
     renderFormPhotos();
     closeDetail();
     document.getElementById('formModal').classList.remove('hidden');
+    showPickerAt(formLat, formLng);
   }
 
   function closeForm(){ document.getElementById('formModal').classList.add('hidden'); }
@@ -823,6 +943,7 @@ if (isConfigured){
       lastRepairDate: document.getElementById('fLastRepair').value,
       specs: document.getElementById('fSpecs').value.trim(),
       notes: document.getElementById('fNotes').value.trim(),
+      extra: collectExtraFields(),
       photos: formPhotos.slice(),
       createdAt: existing ? (existing.createdAt || Date.now()) : Date.now(),
       updatedAt: Date.now()
@@ -869,6 +990,12 @@ if (isConfigured){
     }
     if (a.installDate) html += "<dt>O'rnatilgan sana</dt><dd>" + escapeHtml(a.installDate) + '</dd>';
     if (a.lastRepairDate) html += "<dt>Oxirgi ta'mirlash</dt><dd>" + escapeHtml(a.lastRepairDate) + '</dd>';
+    if (a.extra && cat.extraFields){
+      cat.extraFields.forEach(function(f){
+        var v = a.extra[f.key];
+        if (v){ html += '<dt>' + escapeHtml(f.label) + '</dt><dd>' + escapeHtml(v) + '</dd>'; }
+      });
+    }
     if (a.specs) html += '<dt>Texnik xususiyatlari</dt><dd>' + escapeHtml(a.specs) + '</dd>';
     if (a.notes) html += '<dt>Izoh</dt><dd>' + escapeHtml(a.notes) + '</dd>';
     html += '</dl>';
@@ -947,6 +1074,7 @@ if (isConfigured){
             lastRepairDate: a.lastRepairDate || '',
             specs: a.specs || '',
             notes: a.notes || '',
+            extra: (a.extra && typeof a.extra === 'object') ? a.extra : {},
             photos: Array.isArray(a.photos) ? a.photos : [],
             createdAt: a.createdAt || Date.now(),
             updatedAt: Date.now()
@@ -966,7 +1094,7 @@ if (isConfigured){
     document.getElementById('btnCancelForm').addEventListener('click', closeForm);
     document.getElementById('formModal').addEventListener('click', function(e){ if (e.target.id === 'formModal') closeForm(); });
     document.getElementById('assetForm').addEventListener('submit', handleFormSubmit);
-    document.getElementById('fCategory').addEventListener('change', function(){ populateSubtypes(this.value); });
+    document.getElementById('fCategory').addEventListener('change', function(){ populateSubtypes(this.value); renderExtraFieldsInputs(this.value); });
     document.getElementById('btnGPS').addEventListener('click', captureGPS);
     document.getElementById('btnAddPhoto').addEventListener('click', function(){ document.getElementById('fPhotoInput').click(); });
     document.getElementById('fPhotoInput').addEventListener('change', function(e){ handlePhotoFiles(e.target.files); e.target.value=''; });
