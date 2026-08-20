@@ -142,6 +142,16 @@
     padding:10px 8px;
     max-width:132px;
   }
+  .view-toggle{display:flex; gap:8px; margin-top:10px;}
+  .view-toggle-btn{
+    flex:1;
+    background:var(--surface); border:1px solid var(--border); color:var(--ink);
+    padding:9px; border-radius:8px; font-size:13px; font-weight:700; cursor:pointer;
+  }
+  .view-toggle-btn.active{background:var(--teal); border-color:var(--teal); color:#fff;}
+  #assetList.hidden{display:none;}
+  #overviewMap{height:60vh; min-height:320px; border-radius:10px; border:1px solid var(--border);}
+  #overviewMap.hidden{display:none;}
 
   /* ---------- List ---------- */
   main{padding:12px 16px 24px;}
@@ -180,6 +190,7 @@
   .card-title{font-weight:700; font-size:15px; margin-bottom:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
   .card-sub{font-size:12px; color:var(--muted); letter-spacing:.02em;}
   .card-loc{font-size:12px; color:var(--muted); margin-top:2px; font-family:ui-monospace,"SF Mono","Roboto Mono",Menlo,monospace; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .card-side{display:flex; flex-direction:column; align-items:flex-end; gap:6px; flex:none;}
   .card-status{
     flex:none;
     font-size:11px;
@@ -188,6 +199,12 @@
     border-radius:6px;
     text-transform:uppercase;
     letter-spacing:.03em;
+    border:none;
+    cursor:pointer;
+  }
+  .card-edit-btn{
+    background:var(--bg); border:1px solid var(--border); color:var(--muted);
+    width:28px; height:28px; border-radius:6px; font-size:13px; cursor:pointer;
   }
 
   /* ---------- FAB ---------- */
@@ -321,6 +338,13 @@
   dl.detail-fields dd{margin:3px 0 0; font-size:14.5px; line-height:1.45;}
   .detail-actions{display:flex; gap:10px; margin-top:20px;}
   .detail-actions .btn{flex:1;}
+  .quick-status-btn{
+    display:block; width:100%; text-align:left;
+    padding:14px 16px; margin-bottom:8px;
+    border:2px solid var(--border); border-radius:8px;
+    background:var(--surface); font-weight:700; font-size:15px;
+    cursor:pointer;
+  }
 
   /* ---------- Lightbox ---------- */
   #lightbox{
@@ -353,6 +377,7 @@
       <div class="sub">Aktivlar bazasi · <span id="connBadge">—</span></div>
     </div>
     <div class="header-actions">
+      <button class="icon-btn" id="btnExportCsv" title="Excel (CSV)">📊</button>
       <button class="icon-btn" id="btnExport" title="Zaxira nusxa">⬇</button>
       <button class="icon-btn" id="btnImport" title="Tiklash">⬆</button>
     </div>
@@ -371,10 +396,17 @@
       <option value="nosoz">Nosoz</option>
     </select>
   </div>
+  <div class="view-toggle" id="viewToggle">
+    <button type="button" class="view-toggle-btn active" data-view="list">📋 Ro'yxat</button>
+    <button type="button" class="view-toggle-btn" data-view="map">🗺️ Xarita</button>
+  </div>
 </div>
 
-<main id="assetList">
-  <div class="empty-state">Yuklanmoqda...</div>
+<main>
+  <div id="assetList">
+    <div class="empty-state">Yuklanmoqda...</div>
+  </div>
+  <div id="overviewMap" class="hidden"></div>
 </main>
 
 <button class="fab" id="fabAdd" title="Yangi obyekt">+</button>
@@ -474,6 +506,17 @@
   <button class="lb-nav lb-next" id="lbNext">›</button>
 </div>
 
+<!-- Quick status change -->
+<div class="modal hidden" id="quickStatusModal">
+  <div class="modal-sheet">
+    <div class="modal-head">
+      <h2>Holatni tezda o'zgartirish</h2>
+      <button class="modal-close" id="btnCloseQuickStatus">✕</button>
+    </div>
+    <div id="quickStatusButtons"></div>
+  </div>
+</div>
+
 <div id="toast"></div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
@@ -486,7 +529,7 @@
    ====================================================================== */
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.17.1/firebase-app.js';
 import {
-  initializeFirestore, persistentLocalCache, persistentSingleTabManager,
+  initializeFirestore, persistentLocalCache, persistentMultipleTabManager,
   collection, doc, setDoc, deleteDoc, onSnapshot
 } from 'https://www.gstatic.com/firebasejs/12.17.1/firebase-firestore.js';
 
@@ -512,7 +555,7 @@ if (isConfigured){
     var fbApp = initializeApp(firebaseConfig);
     try{
       db = initializeFirestore(fbApp, {
-        localCache: persistentLocalCache({ tabManager: persistentSingleTabManager() })
+        localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
       });
     } catch(persistErr){
       console.warn('Lokal keshsiz rejimda ishlayapti', persistErr);
@@ -533,7 +576,16 @@ if (isConfigured){
       subtypes:["Panjara/g'alvir","Qum ushlagich","Birlamchi cho'ktirgich","Ikkilamchi cho'ktirgich","Aerotenk","Dezinfeksiya bloki","Loyqa maydonchasi","Metantenk","Boshqa"],
       extraFields:[
         { key:'capacity', label:'Loyiha quvvati (m³/kun)', type:'number' },
+        { key:'actualCapacity', label:'Amaldagi quvvat (m³/kun)', type:'number' },
         { key:'treatmentMethod', label:'Tozalash usuli', type:'text' }
+      ] },
+    { id:'loc', name:"Lokal tozalash inshootlari (LOS)", icon:'🏠', color:'#BE185D',
+      subtypes:["Kompakt tozalash qurilmasi","Septik/septik-quduq","Biofiltr","Avtonom kanalizatsiya moduli","Boshqa"],
+      extraFields:[
+        { key:'capacity', label:'Quvvati (m³/kun)', type:'number' },
+        { key:'servedUnits', label:'Xizmat ko\'rsatadigan obyekt/aholi', type:'text' },
+        { key:'model', label:'Rusumi/modeli', type:'text' },
+        { key:'installType', label:"O'rnatish turi", type:'select', options:['Statsionar',"Ko'chma"] }
       ] },
     { id:'kns', name:"Nasos stansiyalari (KNS)", icon:'⚙️', color:'#1D4ED8',
       subtypes:["Nasos","Boshqaruv shkafi","Zaxira generator","Boshqa"],
@@ -627,7 +679,7 @@ if (isConfigured){
         .sort(function(a,b){ return (b.updatedAt||0) - (a.updatedAt||0); });
       updateConnBadge(snapshot.metadata.fromCache);
       renderStats();
-      renderList();
+      renderCurrentView();
     }, function(err){
       console.error('Tinglashda xatolik', err);
       document.getElementById('assetList').innerHTML = '<div class="empty-state">⚠️ Ma\'lumot olishda xatolik.<br>Firestore qoidalarini (Rules) tekshiring.</div>';
@@ -659,7 +711,7 @@ if (isConfigured){
         Array.prototype.forEach.call(el.querySelectorAll('.chip'), function(b){ b.classList.remove('active'); });
         btn.classList.add('active');
         currentFilter.category = btn.getAttribute('data-cat');
-        renderList();
+        renderCurrentView();
       });
     });
   }
@@ -694,9 +746,29 @@ if (isConfigured){
           '<div class="card-sub">' + escapeHtml(cat.name||'') + (a.subtype ? ' • ' + escapeHtml(a.subtype) : '') + '</div>' +
           (a.location ? '<div class="card-loc">📍 ' + escapeHtml(a.location) + '</div>' : '') +
         '</div>' +
-        '<div class="card-status" style="background:' + (status.color||'#ccc') + '22;color:' + (status.color||'#666') + '">' + escapeHtml(status.name||'') + '</div>' +
+        '<div class="card-side">' +
+          '<button type="button" class="card-status" data-status-id="' + a.id + '" style="background:' + (status.color||'#ccc') + '22;color:' + (status.color||'#666') + '">' + escapeHtml(status.name||'') + '</button>' +
+          '<button type="button" class="card-edit-btn" data-edit-id="' + a.id + '" title="Tahrirlash">✏️</button>' +
+        '</div>' +
       '</div>'
     );
+  }
+
+  var currentView = 'list';
+
+  function renderCurrentView(){
+    if (currentView === 'map'){ renderMapView(); }
+    else { renderList(); }
+  }
+
+  function setView(view){
+    currentView = view;
+    document.getElementById('assetList').classList.toggle('hidden', view !== 'list');
+    document.getElementById('overviewMap').classList.toggle('hidden', view !== 'map');
+    Array.prototype.forEach.call(document.querySelectorAll('.view-toggle-btn'), function(btn){
+      btn.classList.toggle('active', btn.getAttribute('data-view') === view);
+    });
+    renderCurrentView();
   }
 
   function renderList(){
@@ -713,6 +785,82 @@ if (isConfigured){
     container.innerHTML = filtered.map(renderCard).join('');
     Array.prototype.forEach.call(container.querySelectorAll('.asset-card'), function(card){
       card.addEventListener('click', function(){ openDetail(card.getAttribute('data-id')); });
+    });
+    Array.prototype.forEach.call(container.querySelectorAll('[data-status-id]'), function(btn){
+      btn.addEventListener('click', function(e){ e.stopPropagation(); openQuickStatus(btn.getAttribute('data-status-id')); });
+    });
+    Array.prototype.forEach.call(container.querySelectorAll('[data-edit-id]'), function(btn){
+      btn.addEventListener('click', function(e){ e.stopPropagation(); openEditForm(btn.getAttribute('data-edit-id')); });
+    });
+  }
+
+  /* ================= Umumiy xarita (barcha obyektlar) ================= */
+  var overviewMap = null;
+  var overviewMarkersLayer = null;
+
+  function ensureOverviewMap(){
+    if (overviewMap || typeof L === 'undefined') return;
+    overviewMap = L.map('overviewMap').setView(DEFAULT_MAP_CENTER, 6);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '&copy; OpenStreetMap'
+    }).addTo(overviewMap);
+    overviewMarkersLayer = L.layerGroup().addTo(overviewMap);
+  }
+
+  function renderMapView(){
+    ensureOverviewMap();
+    if (!overviewMap) return;
+    setTimeout(function(){
+      overviewMap.invalidateSize();
+      overviewMarkersLayer.clearLayers();
+      var pts = [];
+      getFilteredAssets().forEach(function(a){
+        if (typeof a.lat !== 'number' || typeof a.lng !== 'number') return;
+        var status = getStatus(a.status) || {};
+        var marker = L.circleMarker([a.lat, a.lng], {
+          radius: 9, weight: 2, color: '#fff', fillColor: status.color || '#666', fillOpacity: 0.95
+        });
+        marker.on('click', function(){ openDetail(a.id); });
+        marker.addTo(overviewMarkersLayer);
+        pts.push([a.lat, a.lng]);
+      });
+      if (pts.length){ overviewMap.fitBounds(pts, { padding:[30,30], maxZoom:15 }); }
+      else { overviewMap.setView(DEFAULT_MAP_CENTER, 6); }
+    }, 60);
+  }
+
+  /* ================= Holatni tezda o'zgartirish ================= */
+  var quickStatusAssetId = null;
+
+  function openQuickStatus(id){
+    var a = assets.filter(function(x){ return x.id === id; })[0];
+    if (!a) return;
+    quickStatusAssetId = id;
+    var html = STATUSES.map(function(s){
+      var active = (a.status === s.id);
+      var style = active
+        ? ('border-color:' + s.color + ';background:' + s.color + ';color:#fff;')
+        : ('border-color:' + s.color + ';color:' + s.color + ';');
+      return '<button type="button" class="quick-status-btn" data-status="' + s.id + '" style="' + style + '">' + escapeHtml(s.name) + (active ? ' ✓' : '') + '</button>';
+    }).join('');
+    document.getElementById('quickStatusButtons').innerHTML = html;
+    Array.prototype.forEach.call(document.querySelectorAll('.quick-status-btn'), function(btn){
+      btn.addEventListener('click', function(){ applyQuickStatus(btn.getAttribute('data-status')); });
+    });
+    document.getElementById('quickStatusModal').classList.remove('hidden');
+  }
+
+  function closeQuickStatus(){ document.getElementById('quickStatusModal').classList.add('hidden'); }
+
+  function applyQuickStatus(statusId){
+    var id = quickStatusAssetId;
+    var a = assets.filter(function(x){ return x.id === id; })[0];
+    closeQuickStatus();
+    if (!a) return;
+    var updated = Object.assign({}, a, { status: statusId, updatedAt: Date.now() });
+    saveAssetToDb(updated).then(function(ok){
+      showToast(ok ? 'Holat yangilandi' : 'Xatolik yuz berdi');
     });
   }
 
@@ -1034,6 +1182,46 @@ if (isConfigured){
   }
 
   /* ================= Export / Import ================= */
+  function csvEscape(val){
+    var s = (val === undefined || val === null) ? '' : String(val);
+    if (/[",\n]/.test(s)){ s = '"' + s.replace(/"/g, '""') + '"'; }
+    return s;
+  }
+
+  function exportCSV(){
+    var headers = ['Nomi','Kategoriya','Turi','Holati','Joylashuvi','Latitude','Longitude',"O'rnatilgan sana","Oxirgi ta'mirlash sanasi","Qo'shimcha xususiyatlar",'Texnik xususiyatlari','Izoh','Rasmlar soni'];
+    var rows = [headers.map(csvEscape).join(',')];
+    assets.forEach(function(a){
+      var cat = getCategory(a.category) || {};
+      var status = getStatus(a.status) || {};
+      var extraText = '';
+      if (a.extra && cat.extraFields){
+        extraText = cat.extraFields
+          .filter(function(f){ return a.extra[f.key]; })
+          .map(function(f){ return f.label + ': ' + a.extra[f.key]; })
+          .join('; ');
+      }
+      var row = [
+        a.name || '', cat.name || '', a.subtype || '', status.name || '', a.location || '',
+        (typeof a.lat === 'number') ? a.lat : '', (typeof a.lng === 'number') ? a.lng : '',
+        a.installDate || '', a.lastRepairDate || '', extraText, a.specs || '', a.notes || '',
+        (a.photos ? a.photos.length : 0)
+      ];
+      rows.push(row.map(csvEscape).join(','));
+    });
+    var csvContent = '\uFEFF' + rows.join('\r\n');
+    var blob = new Blob([csvContent], { type:'text/csv;charset=utf-8;' });
+    var url = URL.createObjectURL(blob);
+    var link = document.createElement('a');
+    link.href = url;
+    link.download = 'oqava-inshootlari-' + new Date().toISOString().slice(0,10) + '.csv';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
+    showToast('Excel (CSV) fayli yuklab olindi');
+  }
+
   function exportData(){
     var data = { exportedAt: new Date().toISOString(), assets: assets };
     var blob = new Blob([JSON.stringify(data)], { type:'application/json' });
@@ -1113,13 +1301,19 @@ if (isConfigured){
     document.getElementById('searchInput').addEventListener('input', function(e){
       clearTimeout(searchTimer);
       var val = e.target.value;
-      searchTimer = setTimeout(function(){ currentFilter.search = val; renderList(); }, 200);
+      searchTimer = setTimeout(function(){ currentFilter.search = val; renderCurrentView(); }, 200);
     });
     document.getElementById('statusFilter').addEventListener('change', function(e){
       currentFilter.status = e.target.value;
-      renderList();
+      renderCurrentView();
     });
+    Array.prototype.forEach.call(document.querySelectorAll('.view-toggle-btn'), function(btn){
+      btn.addEventListener('click', function(){ setView(btn.getAttribute('data-view')); });
+    });
+    document.getElementById('btnCloseQuickStatus').addEventListener('click', closeQuickStatus);
+    document.getElementById('quickStatusModal').addEventListener('click', function(e){ if (e.target.id === 'quickStatusModal') closeQuickStatus(); });
 
+    document.getElementById('btnExportCsv').addEventListener('click', exportCSV);
     document.getElementById('btnExport').addEventListener('click', exportData);
     document.getElementById('btnImport').addEventListener('click', function(){ document.getElementById('importFileInput').click(); });
     document.getElementById('importFileInput').addEventListener('change', function(e){
@@ -1136,8 +1330,10 @@ if (isConfigured){
         '<p>Fayl boshidagi <code>firebaseConfig</code> qismiga Firebase loyihangizning kalitlarini joylashtiring, so\'ng faylni saqlang. Qadamlar chatda yozilgan.</p>' +
       '</div>';
     document.getElementById('fabAdd').style.display = 'none';
+    document.getElementById('btnExportCsv').style.display = 'none';
     document.getElementById('btnExport').style.display = 'none';
     document.getElementById('btnImport').style.display = 'none';
+    document.getElementById('viewToggle').style.display = 'none';
     document.getElementById('connBadge').textContent = '⚙️ sozlanmagan';
   }
 
