@@ -343,6 +343,13 @@
   dl.detail-fields dd{margin:3px 0 0; font-size:14.5px; line-height:1.45;}
   .detail-actions{display:flex; gap:10px; margin-top:20px;}
   .detail-actions .btn{flex:1;}
+  .children-list{display:flex; flex-direction:column; gap:8px;}
+  .child-row{
+    display:flex; align-items:center; justify-content:space-between; gap:10px;
+    background:var(--bg); border:1px solid var(--border); border-radius:8px;
+    padding:10px 12px; cursor:pointer;
+  }
+  .child-name{font-size:14px; font-weight:600;}
   .quick-status-btn{
     display:block; width:100%; text-align:left;
     padding:14px 16px; margin-bottom:8px;
@@ -457,6 +464,11 @@
       <div class="field">
         <label>Turi</label>
         <select id="fSubtype"></select>
+      </div>
+      <div class="field">
+        <label>Qaysi inshoot tarkibida? (ixtiyoriy)</label>
+        <select id="fParent"></select>
+        <div class="map-hint">Bu jihoz/qism biror inshoot ichida bo'lsa, o'shani tanlang. Mustaqil obyekt bo'lsa — bo'sh qoldiring.</div>
       </div>
       <div class="field">
         <label>Nomi / raqami</label>
@@ -603,7 +615,7 @@ if (isConfigured){
   /* ================= Data definitions ================= */
   var CATEGORIES = [
     { id:'tozalash', name:"Tozalash inshootlari", icon:'🏭', color:'#0F6B7A',
-      subtypes:["Panjara/g'alvir","Qum ushlagich","Birlamchi cho'ktirgich","Ikkilamchi cho'ktirgich","Aerotenk","Dezinfeksiya bloki","Loyqa maydonchasi","Metantenk","Boshqa"],
+      subtypes:["Panjara/g'alvir","Qum ushlagich","Birlamchi cho'ktirgich","Ikkilamchi cho'ktirgich","Aerotenk","Havo haydash stansiyasi","Dezinfeksiya bloki","Loyqa maydonchasi","Metantenk","Boshqa"],
       extraFields:[
         { key:'capacity', label:'Loyiha quvvati (ming m³/kun)', type:'number' },
         { key:'actualCapacity', label:'Amaldagi quvvat (ming m³/kun)', type:'number' },
@@ -764,6 +776,7 @@ if (isConfigured){
 
   function getFilteredAssets(){
     return assets.filter(function(a){
+      if (a.parentId) return false;
       if (currentFilter.category !== 'all' && a.category !== currentFilter.category) return false;
       if (currentFilter.status !== 'all' && a.status !== currentFilter.status) return false;
       if (currentFilter.search){
@@ -775,6 +788,10 @@ if (isConfigured){
     });
   }
 
+  function getChildren(id){
+    return assets.filter(function(x){ return x.parentId === id; });
+  }
+
   function renderCard(a){
     var cat = getCategory(a.category) || {};
     var status = getStatus(a.status) || {};
@@ -784,12 +801,13 @@ if (isConfigured){
     } else {
       thumb = '<div class="card-thumb card-thumb-placeholder" style="background:' + (cat.color||'#ccc') + '22">' + (cat.icon||'📦') + '</div>';
     }
+    var childCount = getChildren(a.id).length;
     return (
       '<div class="asset-card" style="border-left-color:' + (status.color||'#ccc') + '" data-id="' + a.id + '">' +
         thumb +
         '<div class="card-info">' +
           '<div class="card-title">' + escapeHtml(a.name || 'Nomsiz') + '</div>' +
-          '<div class="card-sub">' + escapeHtml(cat.name||'') + (a.subtype ? ' • ' + escapeHtml(a.subtype) : '') + '</div>' +
+          '<div class="card-sub">' + escapeHtml(cat.name||'') + (a.subtype ? ' • ' + escapeHtml(a.subtype) : '') + (childCount ? ' • 🔗 ' + childCount + ' ta qism' : '') + '</div>' +
           (a.location ? '<div class="card-loc">📍 ' + escapeHtml(a.location) + '</div>' : '') +
         '</div>' +
         '<div class="card-side">' +
@@ -924,6 +942,22 @@ if (isConfigured){
     var list = cat ? cat.subtypes : [];
     sel.innerHTML = list.map(function(st){ return '<option value="' + escapeHtml(st) + '">' + escapeHtml(st) + '</option>'; }).join('');
     if (selected){ sel.value = selected; }
+  }
+
+  function populateParentOptions(excludeId, selectedParentId){
+    var sel = document.getElementById('fParent');
+    var options = assets.filter(function(a){
+      if (excludeId && a.id === excludeId) return false;
+      if (excludeId && a.parentId === excludeId) return false;
+      return true;
+    });
+    var html = '<option value="">— Mustaqil obyekt (Inshoot) —</option>';
+    html += options.map(function(a){
+      var cat = getCategory(a.category) || {};
+      return '<option value="' + a.id + '">' + (cat.icon||'') + ' ' + escapeHtml(a.name || 'Nomsiz') + '</option>';
+    }).join('');
+    sel.innerHTML = html;
+    sel.value = selectedParentId || '';
   }
 
   function renderExtraFieldsInputs(categoryId, values){
@@ -1104,6 +1138,7 @@ if (isConfigured){
     document.getElementById('assetForm').reset();
     populateSubtypes(CATEGORIES[0].id);
     renderExtraFieldsInputs(CATEGORIES[0].id);
+    populateParentOptions(null, null);
     document.getElementById('fStatus').value = 'ishlayapti';
     document.getElementById('gpsDisplay').textContent = '';
     document.getElementById('btnGPS').textContent = '📍 GPS olish';
@@ -1123,6 +1158,7 @@ if (isConfigured){
     document.getElementById('fCategory').value = a.category;
     populateSubtypes(a.category, a.subtype);
     renderExtraFieldsInputs(a.category, a.extra);
+    populateParentOptions(a.id, a.parentId);
     document.getElementById('fName').value = a.name || '';
     document.getElementById('fLocation').value = a.location || '';
     document.getElementById('fInstallDate').value = a.installDate || '';
@@ -1149,6 +1185,7 @@ if (isConfigured){
       id: editingId || uid(),
       category: document.getElementById('fCategory').value,
       subtype: document.getElementById('fSubtype').value,
+      parentId: document.getElementById('fParent').value || null,
       name: name,
       location: document.getElementById('fLocation').value.trim(),
       lat: formLat, lng: formLng,
@@ -1205,6 +1242,12 @@ if (isConfigured){
     html += '<div class="detail-badge" style="background:' + (status.color||'#ccc') + '22;color:' + (status.color||'#666') + '">' + escapeHtml(status.name||'') + '</div>';
     html += '<dl class="detail-fields">';
     html += '<dt>Kategoriya</dt><dd>' + (cat.icon||'') + ' ' + escapeHtml(cat.name||'') + (a.subtype ? ' • ' + escapeHtml(a.subtype) : '') + '</dd>';
+    if (a.parentId){
+      var parent = assets.filter(function(x){ return x.id === a.parentId; })[0];
+      if (parent){
+        html += '<dt>Tegishli inshoot</dt><dd><a href="#" data-jump-parent="' + parent.id + '">' + escapeHtml(parent.name||'') + ' →</a></dd>';
+      }
+    }
     if (a.location){
       html += '<dt>Joylashuvi</dt><dd>📍 ' + escapeHtml(a.location);
       if (typeof a.lat === 'number' && typeof a.lng === 'number'){
@@ -1225,7 +1268,26 @@ if (isConfigured){
     if (a.specs) html += '<dt>Texnik xususiyatlari</dt><dd>' + escapeHtml(a.specs) + '</dd>';
     if (a.notes) html += '<dt>Izoh</dt><dd>' + escapeHtml(a.notes) + '</dd>';
     html += '</dl>';
+    var children = getChildren(a.id);
+    if (children.length){
+      html += '<div class="section-label">Tarkibiy qismlar (' + children.length + ')</div>';
+      html += '<div class="children-list">' + children.map(function(c){
+        var cs = getStatus(c.status) || {};
+        var ccat = getCategory(c.category) || {};
+        return '<div class="child-row" data-child-id="' + c.id + '">' +
+          '<span class="child-name">' + (ccat.icon||'') + ' ' + escapeHtml(c.name||'Nomsiz') + '</span>' +
+          '<span class="card-status" style="background:' + (cs.color||'#ccc') + '22;color:' + (cs.color||'#666') + '">' + escapeHtml(cs.name||'') + '</span>' +
+        '</div>';
+      }).join('') + '</div>';
+    }
     document.getElementById('detailContent').innerHTML = html;
+    Array.prototype.forEach.call(document.querySelectorAll('.child-row'), function(row){
+      row.addEventListener('click', function(){ openDetail(row.getAttribute('data-child-id')); });
+    });
+    var parentLink = document.querySelector('[data-jump-parent]');
+    if (parentLink){
+      parentLink.addEventListener('click', function(e){ e.preventDefault(); openDetail(parentLink.getAttribute('data-jump-parent')); });
+    }
     Array.prototype.forEach.call(document.querySelectorAll('.detail-photos img'), function(img){
       attachImgFallback(img, 'detail-photo-broken', '🖼️');
       img.addEventListener('click', function(){ openLightbox(a.photos, parseInt(img.getAttribute('data-idx'),10)); });
@@ -1272,11 +1334,16 @@ if (isConfigured){
   }
 
   function exportCSV(){
-    var headers = ['Nomi','Kategoriya','Turi','Holati','Joylashuvi','Latitude','Longitude',"O'rnatilgan sana","Oxirgi ta'mirlash sanasi","Qo'shimcha xususiyatlar",'Texnik xususiyatlari','Izoh','Rasmlar soni'];
+    var headers = ['Nomi','Kategoriya','Turi','Tegishli inshoot','Holati','Joylashuvi','Latitude','Longitude',"O'rnatilgan sana","Oxirgi ta'mirlash sanasi","Qo'shimcha xususiyatlar",'Texnik xususiyatlari','Izoh','Rasmlar soni'];
     var rows = [headers.map(csvEscape).join(',')];
     assets.forEach(function(a){
       var cat = getCategory(a.category) || {};
       var status = getStatus(a.status) || {};
+      var parentName = '';
+      if (a.parentId){
+        var parent = assets.filter(function(x){ return x.id === a.parentId; })[0];
+        parentName = parent ? (parent.name || '') : '';
+      }
       var extraText = '';
       if (a.extra && cat.extraFields){
         extraText = cat.extraFields
@@ -1285,7 +1352,7 @@ if (isConfigured){
           .join('; ');
       }
       var row = [
-        a.name || '', cat.name || '', a.subtype || '', status.name || '', a.location || '',
+        a.name || '', cat.name || '', a.subtype || '', parentName, status.name || '', a.location || '',
         (typeof a.lat === 'number') ? a.lat : '', (typeof a.lng === 'number') ? a.lng : '',
         a.installDate || '', a.lastRepairDate || '', extraText, a.specs || '', a.notes || '',
         (a.photos ? a.photos.length : 0)
@@ -1333,9 +1400,10 @@ if (isConfigured){
       list.forEach(function(a){
         chain = chain.then(function(){
           var newAsset = {
-            id: uid(),
+            id: a.id || uid(),
             category: a.category || CATEGORIES[0].id,
             subtype: a.subtype || '',
+            parentId: a.parentId || null,
             name: a.name || 'Nomsiz',
             location: a.location || '',
             lat: (typeof a.lat === 'number') ? a.lat : null,
