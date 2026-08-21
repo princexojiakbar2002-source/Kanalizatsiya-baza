@@ -324,6 +324,11 @@
   /* ---------- Detail ---------- */
   .detail-photos{display:flex; gap:8px; overflow-x:auto; margin-bottom:14px;}
   .detail-photos img{width:96px; height:96px; object-fit:cover; border-radius:8px; flex:none; cursor:pointer;}
+  .detail-photo-broken{
+    width:96px; height:96px; border-radius:8px; flex:none;
+    display:flex; align-items:center; justify-content:center;
+    background:var(--bg); color:var(--muted); font-size:22px;
+  }
   .detail-status-bar{height:5px; border-radius:4px; margin-bottom:14px;}
   .detail-name{font-size:20px; font-weight:800; margin:0 0 4px;}
   .detail-badge{
@@ -345,6 +350,13 @@
     background:var(--surface); font-weight:700; font-size:15px;
     cursor:pointer;
   }
+  .checkbox-group{display:flex; flex-wrap:wrap; gap:8px;}
+  .checkbox-row{
+    display:flex; align-items:center; gap:6px; font-size:14px;
+    background:var(--bg); padding:8px 12px; border-radius:8px; border:1px solid var(--border);
+    cursor:pointer;
+  }
+  .checkbox-row input{width:auto; accent-color:var(--teal);}
 
   /* ---------- Lightbox ---------- */
   #lightbox{
@@ -365,6 +377,24 @@
 
   @media (prefers-reduced-motion: reduce){
     *{transition:none !important; animation:none !important;}
+  }
+
+  /* ---------- Responsive ---------- */
+  @media (max-width: 380px){
+    header h1{ font-size:16px; }
+    header .sub{ font-size:10px; }
+    .icon-btn{ width:32px; height:32px; font-size:14px; }
+    .header-actions{ gap:6px; }
+    .search-row{ flex-wrap:wrap; }
+    .search-row select{ max-width:none; flex:1 1 100%; }
+  }
+  @media (max-width: 340px){
+    .row-2{ grid-template-columns:1fr; }
+  }
+  @media (min-width: 700px){
+    .filters, main{ max-width:640px; margin-left:auto; margin-right:auto; }
+    .modal{ align-items:center; }
+    .modal-sheet{ max-width:480px; max-height:88vh; border-radius:16px; }
   }
 </style>
 </head>
@@ -575,14 +605,21 @@ if (isConfigured){
     { id:'tozalash', name:"Tozalash inshootlari", icon:'🏭', color:'#0F6B7A',
       subtypes:["Panjara/g'alvir","Qum ushlagich","Birlamchi cho'ktirgich","Ikkilamchi cho'ktirgich","Aerotenk","Dezinfeksiya bloki","Loyqa maydonchasi","Metantenk","Boshqa"],
       extraFields:[
-        { key:'capacity', label:'Loyiha quvvati (m³/kun)', type:'number' },
-        { key:'actualCapacity', label:'Amaldagi quvvat (m³/kun)', type:'number' },
-        { key:'treatmentMethod', label:'Tozalash usuli', type:'text' }
+        { key:'capacity', label:'Loyiha quvvati (ming m³/kun)', type:'number' },
+        { key:'actualCapacity', label:'Amaldagi quvvat (ming m³/kun)', type:'number' },
+        { key:'throughput', label:"O'tkazish (ming m³/kun)", type:'number' },
+        { key:'treatmentMethod', label:'Tozalash usuli', type:'checkboxgroup', options:['Biologik','Mexanik','Kimyoviy'] },
+        { key:'efficiency', label:'Tozalash samaradorligi (%)', type:'number' },
+        { key:'landArea', label:'Yer maydoni (ga)', type:'number' },
+        { key:'dischargePoint', label:'Chiqindi suv tashlanadigan joy', type:'text' },
+        { key:'populationServed', label:"Xizmat ko'rsatiladigan aholi soni", type:'number' }
       ] },
     { id:'loc', name:"Lokal tozalash inshootlari (LOS)", icon:'🏠', color:'#BE185D',
       subtypes:["Kompakt tozalash qurilmasi","Septik/septik-quduq","Biofiltr","Avtonom kanalizatsiya moduli","Boshqa"],
       extraFields:[
         { key:'capacity', label:'Quvvati (m³/kun)', type:'number' },
+        { key:'treatmentMethod', label:'Tozalash usuli', type:'checkboxgroup', options:['Biologik','Mexanik','Kimyoviy'] },
+        { key:'landArea', label:'Yer maydoni (ga)', type:'number' },
         { key:'servedUnits', label:'Xizmat ko\'rsatadigan obyekt/aholi', type:'text' },
         { key:'model', label:'Rusumi/modeli', type:'text' },
         { key:'installType', label:"O'rnatish turi", type:'select', options:['Statsionar',"Ko'chma"] }
@@ -598,6 +635,7 @@ if (isConfigured){
     { id:'tarmoq', name:"Tarmoq va quduqlar", icon:'🕳️', color:'#7C3AED',
       subtypes:["Kollektor","Nazorat quduq","Aylanma quduq","Boshqa"],
       extraFields:[
+        { key:'networkType', label:'Tarmoq turi', type:'select', options:['Magistral','Oqava (lateral)','Boshqa'] },
         { key:'lengthKm', label:'Uzunligi (km)', type:'number' },
         { key:'diameter', label:'Diametri (mm)', type:'number' },
         { key:'material', label:'Material', type:'select', options:['Chugun',"Plastik (PVX/PE)",'Beton','Asbest','Boshqa'] },
@@ -648,6 +686,14 @@ if (isConfigured){
     t.classList.add('show');
     clearTimeout(t._timer);
     t._timer = setTimeout(function(){ t.classList.remove('show'); }, 2400);
+  }
+  function attachImgFallback(imgEl, fallbackClass, fallbackText){
+    imgEl.addEventListener('error', function(){
+      var div = document.createElement('div');
+      div.className = fallbackClass;
+      div.textContent = fallbackText || '🖼️';
+      if (imgEl.parentNode) imgEl.replaceWith(div);
+    }, { once:true });
   }
 
   /* ================= Firestore data layer ================= */
@@ -783,6 +829,9 @@ if (isConfigured){
       return;
     }
     container.innerHTML = filtered.map(renderCard).join('');
+    Array.prototype.forEach.call(container.querySelectorAll('img.card-thumb'), function(img){
+      attachImgFallback(img, 'card-thumb card-thumb-placeholder', '🖼️');
+    });
     Array.prototype.forEach.call(container.querySelectorAll('.asset-card'), function(card){
       card.addEventListener('click', function(){ openDetail(card.getAttribute('data-id')); });
     });
@@ -892,6 +941,14 @@ if (isConfigured){
         }).join('');
         return '<div class="field"><label>' + escapeHtml(f.label) + '</label><select data-ef="' + f.key + '">' + opts + '</select></div>';
       }
+      if (f.type === 'checkboxgroup'){
+        var selectedVals = String(val).split(',').map(function(s){ return s.trim(); }).filter(Boolean);
+        var boxes = f.options.map(function(o){
+          var checked = selectedVals.indexOf(o) !== -1;
+          return '<label class="checkbox-row"><input type="checkbox" data-efgroup="' + f.key + '" value="' + escapeHtml(o) + '"' + (checked ? ' checked' : '') + '> ' + escapeHtml(o) + '</label>';
+        }).join('');
+        return '<div class="field"><label>' + escapeHtml(f.label) + '</label><div class="checkbox-group">' + boxes + '</div></div>';
+      }
       var inputType = (f.type === 'number') ? 'number' : (f.type === 'date' ? 'date' : 'text');
       return '<div class="field"><label>' + escapeHtml(f.label) + '</label><input type="' + inputType + '" data-ef="' + f.key + '" value="' + escapeHtml(val) + '"></div>';
     }).join('');
@@ -902,6 +959,15 @@ if (isConfigured){
     var extra = {};
     Array.prototype.forEach.call(document.querySelectorAll('#fExtraFields [data-ef]'), function(el){
       if (el.value) extra[el.getAttribute('data-ef')] = el.value;
+    });
+    var groups = {};
+    Array.prototype.forEach.call(document.querySelectorAll('#fExtraFields [data-efgroup]'), function(el){
+      var key = el.getAttribute('data-efgroup');
+      if (!groups[key]) groups[key] = [];
+      if (el.checked) groups[key].push(el.value);
+    });
+    Object.keys(groups).forEach(function(key){
+      if (groups[key].length) extra[key] = groups[key].join(', ');
     });
     return extra;
   }
@@ -1114,6 +1180,16 @@ if (isConfigured){
   }
 
   /* ================= Detail ================= */
+  function formatServiceAge(installDateStr){
+    try{
+      var d = new Date(installDateStr);
+      if (isNaN(d.getTime())) return '';
+      var years = (Date.now() - d.getTime()) / (365.25 * 24 * 3600 * 1000);
+      if (years < 0) return '';
+      return ' <span class="mono" style="color:var(--muted);">(' + years.toFixed(1) + ' yildan beri)</span>';
+    } catch(e){ return ''; }
+  }
+
   function openDetail(id){
     var a = assets.filter(function(x){ return x.id === id; })[0];
     if (!a) return;
@@ -1136,7 +1212,9 @@ if (isConfigured){
       }
       html += '</dd>';
     }
-    if (a.installDate) html += "<dt>O'rnatilgan sana</dt><dd>" + escapeHtml(a.installDate) + '</dd>';
+    if (a.installDate){
+      html += "<dt>O'rnatilgan sana</dt><dd>" + escapeHtml(a.installDate) + formatServiceAge(a.installDate) + '</dd>';
+    }
     if (a.lastRepairDate) html += "<dt>Oxirgi ta'mirlash</dt><dd>" + escapeHtml(a.lastRepairDate) + '</dd>';
     if (a.extra && cat.extraFields){
       cat.extraFields.forEach(function(f){
@@ -1149,6 +1227,7 @@ if (isConfigured){
     html += '</dl>';
     document.getElementById('detailContent').innerHTML = html;
     Array.prototype.forEach.call(document.querySelectorAll('.detail-photos img'), function(img){
+      attachImgFallback(img, 'detail-photo-broken', '🖼️');
       img.addEventListener('click', function(){ openLightbox(a.photos, parseInt(img.getAttribute('data-idx'),10)); });
     });
     document.getElementById('detailModal').classList.remove('hidden');
@@ -1167,13 +1246,17 @@ if (isConfigured){
 
   /* ================= Lightbox ================= */
   function openLightbox(photos, idx){
-    lightboxPhotos = photos || [];
-    lightboxIndex = idx || 0;
+    if (!photos || !photos.length){ showToast('Rasm topilmadi'); return; }
+    lightboxPhotos = photos;
+    lightboxIndex = Math.max(0, Math.min(idx || 0, photos.length - 1));
     renderLightbox();
     document.getElementById('lightbox').classList.remove('hidden');
   }
   function renderLightbox(){
-    document.getElementById('lightboxImg').src = lightboxPhotos[lightboxIndex] || '';
+    var img = document.getElementById('lightboxImg');
+    var src = lightboxPhotos[lightboxIndex];
+    if (!src){ document.getElementById('lightbox').classList.add('hidden'); return; }
+    img.src = src;
   }
   function lightboxNav(dir){
     if (!lightboxPhotos.length) return;
@@ -1293,6 +1376,10 @@ if (isConfigured){
     document.getElementById('btnEditDetail').addEventListener('click', function(){ openEditForm(currentDetailId); });
 
     document.getElementById('lbClose').addEventListener('click', function(){ document.getElementById('lightbox').classList.add('hidden'); });
+    document.getElementById('lightboxImg').addEventListener('error', function(){
+      document.getElementById('lightbox').classList.add('hidden');
+      showToast("Rasmni ochib bo'lmadi");
+    });
     document.getElementById('lightbox').addEventListener('click', function(e){ if (e.target.id === 'lightbox') document.getElementById('lightbox').classList.add('hidden'); });
     document.getElementById('lbPrev').addEventListener('click', function(){ lightboxNav(-1); });
     document.getElementById('lbNext').addEventListener('click', function(){ lightboxNav(1); });
