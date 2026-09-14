@@ -335,6 +335,15 @@
     display:inline-block; font-size:11px; font-weight:700; text-transform:uppercase;
     letter-spacing:.04em; padding:4px 10px; border-radius:6px; margin-bottom:14px;
   }
+  .stage-pipeline{display:flex; gap:4px; overflow-x:auto; align-items:center; padding-bottom:6px; -webkit-overflow-scrolling:touch;}
+  .stage-chip{
+    flex:none; display:flex; flex-direction:column; align-items:center; gap:3px;
+    padding:8px 10px; border-radius:10px; min-width:62px;
+    font-size:9.5px; font-weight:700; text-align:center; text-transform:uppercase; letter-spacing:.01em;
+    line-height:1.25;
+  }
+  .stage-chip .stage-icon{font-size:17px;}
+  .stage-arrow{flex:none; color:var(--muted); font-size:13px;}
   dl.detail-fields{margin:0;}
   dl.detail-fields dt{
     font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.06em;
@@ -792,6 +801,59 @@ if (isConfigured){
     return assets.filter(function(x){ return x.parentId === id; });
   }
 
+  /* ================= Tozalash jarayoni bosqichlari ================= */
+  var STAGE_DEFS = {
+    tozalash: [
+      { id:'intake', name:'Qabul qilish', icon:'⬇️', subtypes:[] },
+      { id:'mechanical', name:'Mexanik tozalash', icon:'🔧', subtypes:["Panjara/g'alvir","Qum ushlagich"] },
+      { id:'primary', name:'Birlamchi tindirish', icon:'🌀', subtypes:["Birlamchi cho'ktirgich"] },
+      { id:'biological', name:'Biologik tozalash', icon:'🫧', subtypes:['Aerotenk','Havo haydash stansiyasi'] },
+      { id:'secondary', name:'Ikkilamchi tindirish', icon:'🌀', subtypes:["Ikkilamchi cho'ktirgich"] },
+      { id:'disinfection', name:'Dezinfeksiya', icon:'🧪', subtypes:['Dezinfeksiya bloki'] },
+      { id:'sludge', name:'Loyqa qayta ishlash', icon:'🪣', subtypes:['Loyqa maydonchasi','Metantenk'] },
+      { id:'discharge', name:'Chiqarish', icon:'➡️', subtypes:[] }
+    ],
+    loc: [
+      { id:'intake', name:'Qabul qilish', icon:'⬇️', subtypes:[] },
+      { id:'treatment', name:'Tozalash', icon:'🫧', subtypes:['Kompakt tozalash qurilmasi',"Septik/septik-quduq",'Biofiltr','Avtonom kanalizatsiya moduli'] },
+      { id:'discharge', name:'Chiqarish', icon:'➡️', subtypes:[] }
+    ],
+    kns: [
+      { id:'intake', name:'Qabul qilish', icon:'⬇️', subtypes:[] },
+      { id:'pumping', name:'Nasoslash', icon:'⚙️', subtypes:['Nasos','Boshqaruv shkafi','Zaxira generator'] },
+      { id:'discharge', name:'Uzatish', icon:'➡️', subtypes:[] }
+    ]
+  };
+  var STATUS_SEVERITY = { ishlayapti:0, tamirda:1, nosoz:2 };
+
+  function computeStageStatus(facility, stageDef){
+    if (!stageDef.subtypes.length) return null;
+    var matches = getChildren(facility.id).filter(function(c){ return stageDef.subtypes.indexOf(c.subtype) !== -1; });
+    if (!matches.length) return null;
+    var worst = null;
+    matches.forEach(function(c){
+      if (worst === null || STATUS_SEVERITY[c.status] > STATUS_SEVERITY[worst]) worst = c.status;
+    });
+    return worst;
+  }
+
+  function renderStagesPipeline(a){
+    var stages = STAGE_DEFS[a.category];
+    if (!stages) return '';
+    var html = '<div class="section-label">Jarayon bosqichlari</div><div class="stage-pipeline">';
+    stages.forEach(function(s, i){
+      var st = computeStageStatus(a, s);
+      var status = st ? getStatus(st) : null;
+      var style = status
+        ? ('background:' + status.color + '22;color:' + status.color + ';')
+        : ('background:var(--bg);color:var(--muted);border:1px dashed var(--border);');
+      html += '<div class="stage-chip" style="' + style + '"><span class="stage-icon">' + s.icon + '</span><span>' + escapeHtml(s.name) + '</span></div>';
+      if (i < stages.length - 1) html += '<span class="stage-arrow">→</span>';
+    });
+    html += '</div>';
+    return html;
+  }
+
   function renderCard(a){
     var cat = getCategory(a.category) || {};
     var status = getStatus(a.status) || {};
@@ -1241,6 +1303,9 @@ if (isConfigured){
     }
     html += '<div class="detail-name">' + escapeHtml(a.name) + '</div>';
     html += '<div class="detail-badge" style="background:' + (status.color||'#ccc') + '22;color:' + (status.color||'#666') + '">' + escapeHtml(status.name||'') + '</div>';
+    if (!a.parentId && STAGE_DEFS[a.category]){
+      html += renderStagesPipeline(a);
+    }
     html += '<dl class="detail-fields">';
     html += '<dt>Kategoriya</dt><dd>' + (cat.icon||'') + ' ' + escapeHtml(cat.name||'') + (a.subtype ? ' • ' + escapeHtml(a.subtype) : '') + '</dd>';
     if (a.parentId){
