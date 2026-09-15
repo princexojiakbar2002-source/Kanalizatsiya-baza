@@ -662,7 +662,7 @@ if (isConfigured){
   /* ================= Data definitions ================= */
   var CATEGORIES = [
     { id:'tozalash', name:"Tozalash inshootlari", icon:'🏭', color:'#0F6B7A',
-      subtypes:["Panjara/g'alvir","Qum ushlagich","Birlamchi cho'ktirgich","Ikkilamchi cho'ktirgich","Aerotenk","Havo haydash stansiyasi","Dezinfeksiya bloki","Loyqa maydonchasi","Metantenk","Boshqa"],
+      subtypes:["Panjara/g'alvir","Qum ushlagich","Birlamchi cho'ktirgich","Ikkilamchi cho'ktirgich","Aerotenk","Havo haydash stansiyasi","Dezinfeksiya bloki","Loyqa maydonchasi","Metantenk","Laboratoriya","Boshqa"],
       extraFields:[
         { key:'capacity', label:'Loyiha quvvati (ming m³/kun)', type:'number' },
         { key:'actualCapacity', label:'Amaldagi quvvat (ming m³/kun)', type:'number' },
@@ -690,28 +690,6 @@ if (isConfigured){
         { key:'pumpPower', label:'Nasos quvvati (kVt)', type:'number' },
         { key:'flowRate', label:'Debiti (m³/soat)', type:'number' },
         { key:'hasGenerator', label:'Zaxira generator', type:'select', options:["Bor","Yo'q"] }
-      ] },
-    { id:'tarmoq', name:"Tarmoq va quduqlar", icon:'🕳️', color:'#7C3AED',
-      subtypes:["Kollektor","Nazorat quduq","Aylanma quduq","Boshqa"],
-      extraFields:[
-        { key:'networkType', label:'Tarmoq turi', type:'select', options:['Magistral','Oqava (lateral)','Boshqa'] },
-        { key:'lengthKm', label:'Uzunligi (km)', type:'number' },
-        { key:'diameter', label:'Diametri (mm)', type:'number' },
-        { key:'material', label:'Material', type:'select', options:['Chugun',"Plastik (PVX/PE)",'Beton','Asbest','Boshqa'] },
-        { key:'wellDepth', label:'Quduq chuqurligi (m)', type:'number' }
-      ] },
-    { id:'nazorat', name:"Nazorat-o'lchov asboblari", icon:'📊', color:'#C2410C',
-      subtypes:["Debitomer","Sifat sensori","SCADA","Boshqa"],
-      extraFields:[
-        { key:'measureRange', label:"O'lchov diapazoni", type:'text' },
-        { key:'accuracy', label:'Aniqlik sinfi', type:'text' },
-        { key:'calibrationDate', label:'Kalibrlash sanasi', type:'date' }
-      ] },
-    { id:'qoshimcha', name:"Qo'shimcha obyektlar", icon:'🏢', color:'#4D7C0F',
-      subtypes:["Laboratoriya","Ombor","Ma'muriy bino","Boshqa"],
-      extraFields:[
-        { key:'area', label:'Maydoni (m²)', type:'number' },
-        { key:'staffCount', label:'Xodimlar soni', type:'number' }
       ] }
   ];
   var STATUSES = [
