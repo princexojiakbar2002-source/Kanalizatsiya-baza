@@ -151,7 +151,20 @@
   .view-toggle-btn.active{background:var(--teal); border-color:var(--teal); color:#fff;}
   #assetList.hidden{display:none;}
   #overviewMap{height:60vh; min-height:320px; border-radius:10px; border:1px solid var(--border);}
+  .leaflet-tooltip.map-label{
+    background:var(--ink); color:#fff; border:none; border-radius:6px;
+    padding:3px 8px; font-size:11px; font-weight:700; box-shadow:0 2px 6px rgba(0,0,0,.25);
+  }
+  .leaflet-tooltip.map-label::before{ border-top-color:var(--ink); }
   #overviewMap.hidden{display:none;}
+  .map-legend{
+    background:rgba(255,255,255,.95); padding:8px 10px; border-radius:8px;
+    font-size:11px; line-height:1.7; box-shadow:0 1px 6px rgba(0,0,0,.25);
+  }
+  .legend-title{font-weight:700; text-transform:uppercase; font-size:9px; color:var(--muted); letter-spacing:.04em;}
+  .legend-row{display:flex; align-items:center; gap:6px; white-space:nowrap;}
+  .legend-dot{width:10px; height:10px; border-radius:50%; flex:none; display:inline-block;}
+  .legend-ring{width:10px; height:10px; border-radius:50%; flex:none; display:inline-block; background:#fff; border:2px solid;}
 
   /* ---------- List ---------- */
   main{padding:12px 16px 24px;}
@@ -946,11 +959,21 @@ if (isConfigured){
   function ensureOverviewMap(){
     if (overviewMap || typeof L === 'undefined') return;
     overviewMap = L.map('overviewMap').setView(DEFAULT_MAP_CENTER, 6);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 19,
-      attribution: '&copy; OpenStreetMap'
-    }).addTo(overviewMap);
+    addLayerSwitcher(overviewMap);
     overviewMarkersLayer = L.layerGroup().addTo(overviewMap);
+    var legend = L.control({ position:'bottomleft' });
+    legend.onAdd = function(){
+      var div = L.DomUtil.create('div', 'map-legend');
+      var catRows = CATEGORIES.map(function(c){
+        return '<div class="legend-row"><span class="legend-dot" style="background:' + c.color + '"></span>' + escapeHtml(c.name) + '</div>';
+      }).join('');
+      var statusRows = STATUSES.map(function(s){
+        return '<div class="legend-row"><span class="legend-ring" style="border-color:' + s.color + '"></span>' + escapeHtml(s.name) + '</div>';
+      }).join('');
+      div.innerHTML = '<div class="legend-title">Kategoriya (rang)</div>' + catRows + '<div class="legend-title" style="margin-top:5px;">Holat (chegara)</div>' + statusRows;
+      return div;
+    };
+    legend.addTo(overviewMap);
   }
 
   function renderMapView(){
@@ -962,10 +985,12 @@ if (isConfigured){
       var pts = [];
       getFilteredAssets().forEach(function(a){
         if (typeof a.lat !== 'number' || typeof a.lng !== 'number') return;
+        var cat = getCategory(a.category) || {};
         var status = getStatus(a.status) || {};
         var marker = L.circleMarker([a.lat, a.lng], {
-          radius: 9, weight: 2, color: '#fff', fillColor: status.color || '#666', fillOpacity: 0.95
+          radius: 9, weight: 3, color: status.color || '#666', fillColor: cat.color || '#666', fillOpacity: 0.95
         });
+        marker.bindTooltip(escapeHtml(a.name || 'Nomsiz'), { permanent: true, direction: 'top', offset: [0, -8], className: 'map-label' });
         marker.on('click', function(){ openDetail(a.id); });
         marker.addTo(overviewMarkersLayer);
         pts.push([a.lat, a.lng]);
@@ -1156,13 +1181,34 @@ if (isConfigured){
     }
   }
 
+  /* ================= Xarita qatlamlari: Xarita / Sun'iy yo'ldosh / Hybrid ================= */
+  function createBaseLayers(){
+    var osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19, attribution: '&copy; OpenStreetMap'
+    });
+    var satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+      maxZoom: 19, attribution: 'Tiles &copy; Esri'
+    });
+    var hybrid = L.layerGroup([
+      L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, attribution: 'Tiles &copy; Esri' }),
+      L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19 })
+    ]);
+    return { osm: osm, satellite: satellite, hybrid: hybrid };
+  }
+  function addLayerSwitcher(map){
+    var layers = createBaseLayers();
+    layers.osm.addTo(map);
+    L.control.layers(
+      { "Xarita": layers.osm, "Sun'iy yo'ldosh": layers.satellite, "Hybrid": layers.hybrid },
+      null,
+      { position: 'topright' }
+    ).addTo(map);
+  }
+
   function ensurePickerMap(){
     if (pickerMap || typeof L === 'undefined') return;
     pickerMap = L.map('locationMap').setView(DEFAULT_MAP_CENTER, 6);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 19,
-      attribution: '&copy; OpenStreetMap'
-    }).addTo(pickerMap);
+    addLayerSwitcher(pickerMap);
     pickerMarker = L.marker(DEFAULT_MAP_CENTER, { draggable:true }).addTo(pickerMap);
     pickerMarker.on('dragend', function(){
       var pos = pickerMarker.getLatLng().wrap();
