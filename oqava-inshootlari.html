@@ -357,6 +357,8 @@
   }
   .stage-chip .stage-icon{font-size:17px;}
   .stage-arrow{flex:none; color:var(--muted); font-size:13px;}
+  .stage-section-label{display:flex; align-items:center; justify-content:space-between; gap:8px;}
+  .stage-empty-hint{font-size:13px; color:var(--muted); margin-bottom:8px;}
   dl.detail-fields{margin:0;}
   dl.detail-fields dt{
     font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.06em;
@@ -619,6 +621,29 @@
   </div>
 </div>
 
+<!-- Stage editor -->
+<div class="modal hidden" id="stageEditModal">
+  <div class="modal-sheet">
+    <div class="modal-head">
+      <h2>Bosqichlarni sozlash</h2>
+      <button class="modal-close" id="btnCloseStageEdit">✕</button>
+    </div>
+    <div id="stageEditChecklist"></div>
+    <div class="field" style="margin-top:14px;">
+      <label>Boshqa bosqich qo'shish</label>
+      <div style="display:flex; gap:8px;">
+        <input type="text" id="customStageInput" placeholder="Bosqich nomi">
+        <button type="button" class="btn" id="btnAddCustomStage">+ Qo'shish</button>
+      </div>
+    </div>
+    <div id="customStagesList" style="margin-top:10px;"></div>
+    <div class="form-actions">
+      <button type="button" class="btn" id="btnCancelStageEdit">Bekor qilish</button>
+      <button type="button" class="btn btn-primary" id="btnSaveStageEdit">Saqlash</button>
+    </div>
+  </div>
+</div>
+
 <div id="toast"></div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
@@ -869,18 +894,100 @@ if (isConfigured){
   function renderStagesPipeline(a){
     var stages = STAGE_DEFS[a.category];
     if (!stages) return '';
-    var html = '<div class="section-label">Jarayon bosqichlari</div><div class="stage-pipeline">';
-    stages.forEach(function(s, i){
+    var enabledIds = Array.isArray(a.enabledStages) ? a.enabledStages : stages.map(function(s){ return s.id; });
+    var visibleStages = stages.filter(function(s){ return enabledIds.indexOf(s.id) !== -1; });
+    var customStages = Array.isArray(a.customStages) ? a.customStages : [];
+    var html = '<div class="section-label stage-section-label">Jarayon bosqichlari' +
+      '<button type="button" class="card-edit-btn" data-edit-stages="' + a.id + '" title="Bosqichlarni sozlash">✏️</button></div>';
+    if (!visibleStages.length && !customStages.length){
+      html += '<div class="stage-empty-hint">Bosqichlar ko\'rsatilmagan — ✏️ bosib qo\'shing.</div>';
+      return html;
+    }
+    html += '<div class="stage-pipeline">';
+    var totalCount = visibleStages.length + customStages.length;
+    var idx = 0;
+    visibleStages.forEach(function(s){
       var st = computeStageStatus(a, s);
       var status = st ? getStatus(st) : null;
       var style = status
         ? ('background:' + status.color + '22;color:' + status.color + ';')
         : ('background:var(--bg);color:var(--muted);border:1px dashed var(--border);');
       html += '<div class="stage-chip" style="' + style + '"><span class="stage-icon">' + s.icon + '</span><span>' + escapeHtml(s.name) + '</span></div>';
-      if (i < stages.length - 1) html += '<span class="stage-arrow">→</span>';
+      idx++;
+      if (idx < totalCount) html += '<span class="stage-arrow">→</span>';
+    });
+    customStages.forEach(function(name){
+      html += '<div class="stage-chip" style="background:var(--bg);color:var(--muted);border:1px dashed var(--border);"><span class="stage-icon">➕</span><span>' + escapeHtml(name) + '</span></div>';
+      idx++;
+      if (idx < totalCount) html += '<span class="stage-arrow">→</span>';
     });
     html += '</div>';
     return html;
+  }
+
+  /* ================= Bosqichlarni tahrirlash ================= */
+  var stageEditAssetId = null;
+  var stageEditEnabled = [];
+  var stageEditCustom = [];
+
+  function openStageEdit(id){
+    var a = assets.filter(function(x){ return x.id === id; })[0];
+    if (!a) return;
+    var stages = STAGE_DEFS[a.category];
+    if (!stages) return;
+    stageEditAssetId = id;
+    stageEditEnabled = Array.isArray(a.enabledStages) ? a.enabledStages.slice() : stages.map(function(s){ return s.id; });
+    stageEditCustom = Array.isArray(a.customStages) ? a.customStages.slice() : [];
+    renderStageEditChecklist(stages);
+    renderCustomStagesList();
+    document.getElementById('stageEditModal').classList.remove('hidden');
+  }
+
+  function renderStageEditChecklist(stages){
+    var html = stages.map(function(s){
+      var checked = stageEditEnabled.indexOf(s.id) !== -1;
+      return '<label class="checkbox-row" style="display:flex; margin-bottom:8px;"><input type="checkbox" data-stage-toggle="' + s.id + '"' + (checked ? ' checked' : '') + '> ' + s.icon + ' ' + escapeHtml(s.name) + '</label>';
+    }).join('');
+    document.getElementById('stageEditChecklist').innerHTML = html;
+    Array.prototype.forEach.call(document.querySelectorAll('[data-stage-toggle]'), function(cb){
+      cb.addEventListener('change', function(){
+        var sid = cb.getAttribute('data-stage-toggle');
+        var idx = stageEditEnabled.indexOf(sid);
+        if (cb.checked){ if (idx === -1) stageEditEnabled.push(sid); }
+        else if (idx !== -1){ stageEditEnabled.splice(idx, 1); }
+      });
+    });
+  }
+
+  function renderCustomStagesList(){
+    var html = stageEditCustom.map(function(name, i){
+      return '<div class="child-row"><span class="child-name">➕ ' + escapeHtml(name) + '</span><button type="button" data-remove-custom="' + i + '" class="card-edit-btn">✕</button></div>';
+    }).join('');
+    document.getElementById('customStagesList').innerHTML = html;
+    Array.prototype.forEach.call(document.querySelectorAll('[data-remove-custom]'), function(btn){
+      btn.addEventListener('click', function(){
+        stageEditCustom.splice(parseInt(btn.getAttribute('data-remove-custom'), 10), 1);
+        renderCustomStagesList();
+      });
+    });
+  }
+
+  function closeStageEdit(){ document.getElementById('stageEditModal').classList.add('hidden'); }
+
+  function saveStageEdit(){
+    var id = stageEditAssetId;
+    var a = assets.filter(function(x){ return x.id === id; })[0];
+    closeStageEdit();
+    if (!a) return;
+    var updated = Object.assign({}, a, {
+      enabledStages: stageEditEnabled.slice(),
+      customStages: stageEditCustom.slice(),
+      updatedAt: Date.now()
+    });
+    saveAssetToDb(updated).then(function(ok){
+      showToast(ok ? 'Bosqichlar yangilandi' : 'Xatolik yuz berdi');
+      if (ok) openDetail(id);
+    });
   }
 
   function renderCard(a){
@@ -1409,6 +1516,10 @@ if (isConfigured){
       }).join('') + '</div>';
     }
     document.getElementById('detailContent').innerHTML = html;
+    var stageEditBtn = document.querySelector('[data-edit-stages]');
+    if (stageEditBtn){
+      stageEditBtn.addEventListener('click', function(){ openStageEdit(stageEditBtn.getAttribute('data-edit-stages')); });
+    }
     Array.prototype.forEach.call(document.querySelectorAll('.child-row'), function(row){
       row.addEventListener('click', function(){ openDetail(row.getAttribute('data-child-id')); });
     });
@@ -1542,6 +1653,8 @@ if (isConfigured){
             specs: a.specs || '',
             notes: a.notes || '',
             extra: (a.extra && typeof a.extra === 'object') ? a.extra : {},
+            enabledStages: Array.isArray(a.enabledStages) ? a.enabledStages : null,
+            customStages: Array.isArray(a.customStages) ? a.customStages : [],
             photos: Array.isArray(a.photos) ? a.photos : [],
             createdAt: a.createdAt || Date.now(),
             updatedAt: Date.now()
@@ -1595,6 +1708,19 @@ if (isConfigured){
     });
     document.getElementById('btnCloseQuickStatus').addEventListener('click', closeQuickStatus);
     document.getElementById('quickStatusModal').addEventListener('click', function(e){ if (e.target.id === 'quickStatusModal') closeQuickStatus(); });
+
+    document.getElementById('btnCloseStageEdit').addEventListener('click', closeStageEdit);
+    document.getElementById('btnCancelStageEdit').addEventListener('click', closeStageEdit);
+    document.getElementById('stageEditModal').addEventListener('click', function(e){ if (e.target.id === 'stageEditModal') closeStageEdit(); });
+    document.getElementById('btnSaveStageEdit').addEventListener('click', saveStageEdit);
+    document.getElementById('btnAddCustomStage').addEventListener('click', function(){
+      var input = document.getElementById('customStageInput');
+      var val = input.value.trim();
+      if (!val) return;
+      stageEditCustom.push(val);
+      input.value = '';
+      renderCustomStagesList();
+    });
 
     document.getElementById('btnExportCsv').addEventListener('click', exportCSV);
     document.getElementById('btnExport').addEventListener('click', exportData);
