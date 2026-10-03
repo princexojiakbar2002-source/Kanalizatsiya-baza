@@ -151,6 +151,10 @@
   .view-toggle-btn.active{background:var(--teal); border-color:var(--teal); color:#fff;}
   #assetList.hidden{display:none;}
   #overviewMap{height:60vh; min-height:320px; border-radius:10px; border:1px solid var(--border);}
+  #globeViz{height:60vh; min-height:380px; border-radius:10px; border:1px solid var(--border); background:#000; overflow:hidden; position:relative;}
+  #globeViz.hidden{display:none;}
+  #globeViz canvas{border-radius:10px;}
+  .globe-hint{position:absolute; left:10px; bottom:10px; z-index:5; background:rgba(0,0,0,.55); color:#fff; font-size:11px; padding:5px 10px; border-radius:6px; pointer-events:none;}
   .leaflet-tooltip.map-label{
     background:var(--ink); color:#fff; border:none; border-radius:6px;
     padding:3px 8px; font-size:11px; font-weight:700; box-shadow:0 2px 6px rgba(0,0,0,.25);
@@ -365,6 +369,13 @@
     color:var(--muted); margin-top:12px;
   }
   dl.detail-fields dd{margin:3px 0 0; font-size:14.5px; line-height:1.45;}
+  .note-box{border-left:4px solid var(--muted); background:var(--bg); border-radius:8px; padding:10px 12px; margin-top:14px;}
+  .note-box.note-warn{border-left-color:var(--amber); background:#FEF3E4;}
+  .note-box.note-ok{border-left-color:var(--green); background:#EAF6EE;}
+  .note-box-title{font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:var(--muted);}
+  .note-box.note-warn .note-box-title{color:var(--amber);}
+  .note-box.note-ok .note-box-title{color:var(--green);}
+  .note-box-text{margin-top:4px; font-size:14.5px; line-height:1.45; white-space:pre-wrap;}
   .detail-actions{display:flex; gap:10px; margin-top:20px;}
   .detail-actions .btn{flex:1;}
   .children-list{display:flex; flex-direction:column; gap:8px;}
@@ -498,6 +509,7 @@
   <div class="view-toggle" id="viewToggle">
     <button type="button" class="view-toggle-btn active" data-view="list">📋 Ro'yxat</button>
     <button type="button" class="view-toggle-btn" data-view="map">🗺️ Xarita</button>
+    <button type="button" class="view-toggle-btn" data-view="globe">🌍 Globus</button>
   </div>
 </div>
 
@@ -506,6 +518,7 @@
     <div class="empty-state">Yuklanmoqda...</div>
   </div>
   <div id="overviewMap" class="hidden"></div>
+  <div id="globeViz" class="hidden"></div>
 </main>
 
 <button class="fab" id="fabAdd" title="Yangi obyekt">+</button>
@@ -568,6 +581,14 @@
       <div class="field">
         <label>Texnik xususiyatlari</label>
         <textarea id="fSpecs" placeholder="Quvvati, o'lchami, rusumi va h.k."></textarea>
+      </div>
+      <div class="field">
+        <label>Kamchiliklar</label>
+        <textarea id="fDeficiencies" placeholder="Aniqlangan muammolar, nosozliklar"></textarea>
+      </div>
+      <div class="field">
+        <label>Takliflar</label>
+        <textarea id="fRecommendations" placeholder="Yaxshilash bo'yicha tavsiyalar"></textarea>
       </div>
       <div class="field">
         <label>Izoh</label>
@@ -647,6 +668,8 @@
 <div id="toast"></div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script src="https://unpkg.com/three"></script>
+<script src="https://unpkg.com/globe.gl"></script>
 <script type="module">
 "use strict";
 
@@ -709,7 +732,9 @@ if (isConfigured){
         { key:'efficiency', label:'Tozalash samaradorligi (%)', type:'number' },
         { key:'landArea', label:'Yer maydoni (ga)', type:'number' },
         { key:'dischargePoint', label:'Chiqindi suv tashlanadigan joy', type:'text' },
-        { key:'populationServed', label:"Xizmat ko'rsatiladigan aholi soni", type:'number' }
+        { key:'populationServed', label:"Xizmat ko'rsatiladigan aholi soni", type:'number' },
+        { key:'householdsServed', label:"Xizmat ko'rsatiladigan xonadonlar soni", type:'number' },
+        { key:'legalEntitiesServed', label:"Xizmat ko'rsatiladigan yuridik shaxslar soni", type:'number' }
       ] },
     { id:'loc', name:"Lokal tozalash inshootlari (LOS)", icon:'🏠', color:'#BE185D',
       subtypes:["Kompakt tozalash qurilmasi","Septik/septik-quduq","Biofiltr","Avtonom kanalizatsiya moduli","Boshqa"],
@@ -1020,6 +1045,7 @@ if (isConfigured){
 
   function renderCurrentView(){
     if (currentView === 'map'){ renderMapView(); }
+    else if (currentView === 'globe'){ renderGlobeView(); }
     else { renderList(); }
   }
 
@@ -1027,6 +1053,7 @@ if (isConfigured){
     currentView = view;
     document.getElementById('assetList').classList.toggle('hidden', view !== 'list');
     document.getElementById('overviewMap').classList.toggle('hidden', view !== 'map');
+    document.getElementById('globeViz').classList.toggle('hidden', view !== 'globe');
     Array.prototype.forEach.call(document.querySelectorAll('.view-toggle-btn'), function(btn){
       btn.classList.toggle('active', btn.getAttribute('data-view') === view);
     });
@@ -1104,6 +1131,62 @@ if (isConfigured){
       });
       if (pts.length){ overviewMap.fitBounds(pts, { padding:[30,30], maxZoom:15 }); }
       else { overviewMap.setView(DEFAULT_MAP_CENTER, 6); }
+    }, 60);
+  }
+
+  /* ================= 3D Globus ================= */
+  var globeInstance = null; // null = not tried, false = failed, object = ready
+
+  function ensureGlobe(){
+    if (globeInstance || globeInstance === false) return;
+    if (typeof Globe === 'undefined'){ globeInstance = false; return; }
+    try{
+      var container = document.getElementById('globeViz');
+      globeInstance = Globe()(container)
+        .globeImageUrl('https://unpkg.com/three-globe/example/img/earth-blue-marble.jpg')
+        .backgroundColor('rgba(0,0,0,0)')
+        .pointAltitude(0.015)
+        .pointRadius(0.5)
+        .pointColor('color')
+        .pointLabel('name')
+        .labelText('name')
+        .labelLat('lat')
+        .labelLng('lng')
+        .labelSize(1.1)
+        .labelDotRadius(0.3)
+        .labelColor(function(){ return 'rgba(255,255,255,0.92)'; })
+        .labelResolution(2)
+        .onPointClick(function(pt){ openDetail(pt.id); });
+      try{ globeInstance.onLabelClick(function(pt){ openDetail(pt.id); }); } catch(e){}
+      globeInstance.pointOfView({ lat: 41.3, lng: 71.3, altitude: 1.6 }, 0);
+      var controls = globeInstance.controls();
+      controls.autoRotate = true;
+      controls.autoRotateSpeed = 0.4;
+      var hint = document.createElement('div');
+      hint.className = 'globe-hint';
+      hint.textContent = "Aylantirish uchun suring — nuqtani bosib ma'lumot oching";
+      container.appendChild(hint);
+    } catch(err){
+      console.error('Globus ishga tushmadi', err);
+      globeInstance = false;
+      document.getElementById('globeViz').innerHTML = '<div class="empty-state" style="color:#fff;">⚠️ 3D globus yuklanmadi (internetni tekshiring). "Xarita" rejimidan foydalaning.</div>';
+    }
+  }
+
+  function renderGlobeView(){
+    ensureGlobe();
+    if (!globeInstance) return;
+    setTimeout(function(){
+      var container = document.getElementById('globeViz');
+      globeInstance.width(container.clientWidth).height(container.clientHeight);
+      var pts = getFilteredAssets().filter(function(a){
+        return typeof a.lat === 'number' && typeof a.lng === 'number';
+      }).map(function(a){
+        var cat = getCategory(a.category) || {};
+        return { id: a.id, lat: a.lat, lng: a.lng, name: a.name || 'Nomsiz', color: cat.color || '#888' };
+      });
+      globeInstance.pointsData(pts);
+      globeInstance.labelsData(pts);
     }, 60);
   }
 
@@ -1397,6 +1480,8 @@ if (isConfigured){
     document.getElementById('fStatus').value = a.status || 'ishlayapti';
     document.getElementById('fLastRepair').value = a.lastRepairDate || '';
     document.getElementById('fSpecs').value = a.specs || '';
+    document.getElementById('fDeficiencies').value = a.deficiencies || '';
+    document.getElementById('fRecommendations').value = a.recommendations || '';
     document.getElementById('fNotes').value = a.notes || '';
     document.getElementById('gpsDisplay').textContent = (formLat && formLng) ? ('📍 ' + formLat.toFixed(6) + ', ' + formLng.toFixed(6)) : '';
     document.getElementById('btnGPS').textContent = '📍 GPS olish';
@@ -1425,6 +1510,8 @@ if (isConfigured){
       status: document.getElementById('fStatus').value,
       lastRepairDate: document.getElementById('fLastRepair').value,
       specs: document.getElementById('fSpecs').value.trim(),
+      deficiencies: document.getElementById('fDeficiencies').value.trim(),
+      recommendations: document.getElementById('fRecommendations').value.trim(),
       notes: document.getElementById('fNotes').value.trim(),
       extra: collectExtraFields(),
       photos: formPhotos.slice(),
@@ -1487,6 +1574,7 @@ if (isConfigured){
       html += '<dt>Joylashuvi</dt><dd>📍 ' + escapeHtml(a.location);
       if (typeof a.lat === 'number' && typeof a.lng === 'number'){
         html += ' — <a href="https://maps.google.com/?q=' + a.lat + ',' + a.lng + '" target="_blank" rel="noopener">xaritada ko\'rish</a>';
+        html += ' — <a href="https://earth.google.com/web/@' + a.lat + ',' + a.lng + ',0a,1200d,35y,0h,0t,0r" target="_blank" rel="noopener">Google Earth\'da ochish</a>';
       }
       html += '</dd>';
     }
@@ -1503,6 +1591,8 @@ if (isConfigured){
     if (a.specs) html += '<dt>Texnik xususiyatlari</dt><dd>' + escapeHtml(a.specs) + '</dd>';
     if (a.notes) html += '<dt>Izoh</dt><dd>' + escapeHtml(a.notes) + '</dd>';
     html += '</dl>';
+    if (a.deficiencies) html += '<div class="note-box note-warn"><div class="note-box-title">⚠️ Kamchiliklar</div><div class="note-box-text">' + escapeHtml(a.deficiencies) + '</div></div>';
+    if (a.recommendations) html += '<div class="note-box note-ok"><div class="note-box-title">✅ Takliflar</div><div class="note-box-text">' + escapeHtml(a.recommendations) + '</div></div>';
     var children = getChildren(a.id);
     if (children.length){
       html += '<div class="section-label">Tarkibiy qismlar (' + children.length + ')</div>';
@@ -1573,7 +1663,7 @@ if (isConfigured){
   }
 
   function exportCSV(){
-    var headers = ['Nomi','Kategoriya','Turi','Tegishli inshoot','Holati','Joylashuvi','Latitude','Longitude',"O'rnatilgan sana","Oxirgi ta'mirlash sanasi","Qo'shimcha xususiyatlar",'Texnik xususiyatlari','Izoh','Rasmlar soni'];
+    var headers = ['Nomi','Kategoriya','Turi','Tegishli inshoot','Holati','Joylashuvi','Latitude','Longitude',"O'rnatilgan sana","Oxirgi ta'mirlash sanasi","Qo'shimcha xususiyatlar",'Texnik xususiyatlari','Kamchiliklar','Takliflar','Izoh','Rasmlar soni'];
     var rows = [headers.map(csvEscape).join(',')];
     assets.forEach(function(a){
       var cat = getCategory(a.category) || {};
@@ -1593,7 +1683,8 @@ if (isConfigured){
       var row = [
         a.name || '', cat.name || '', a.subtype || '', parentName, status.name || '', a.location || '',
         (typeof a.lat === 'number') ? a.lat : '', (typeof a.lng === 'number') ? a.lng : '',
-        a.installDate || '', a.lastRepairDate || '', extraText, a.specs || '', a.notes || '',
+        a.installDate || '', a.lastRepairDate || '', extraText, a.specs || '',
+        a.deficiencies || '', a.recommendations || '', a.notes || '',
         (a.photos ? a.photos.length : 0)
       ];
       rows.push(row.map(csvEscape).join(','));
@@ -1651,6 +1742,8 @@ if (isConfigured){
             status: a.status || 'ishlayapti',
             lastRepairDate: a.lastRepairDate || '',
             specs: a.specs || '',
+            deficiencies: a.deficiencies || '',
+            recommendations: a.recommendations || '',
             notes: a.notes || '',
             extra: (a.extra && typeof a.extra === 'object') ? a.extra : {},
             enabledStages: Array.isArray(a.enabledStages) ? a.enabledStages : null,
