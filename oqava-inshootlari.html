@@ -169,6 +169,19 @@
   .legend-row{display:flex; align-items:center; gap:6px; white-space:nowrap;}
   .legend-dot{width:10px; height:10px; border-radius:50%; flex:none; display:inline-block;}
   .legend-ring{width:10px; height:10px; border-radius:50%; flex:none; display:inline-block; background:#fff; border:2px solid;}
+  .legend-line{width:16px; height:3px; border-radius:2px; flex:none; display:inline-block;}
+  .map-toolbar{display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:10px; flex-wrap:wrap;}
+  .map-toolbar.hidden{display:none;}
+  .map-toolbar-toggle{display:flex; align-items:center; gap:6px; font-size:13px; color:var(--muted); cursor:pointer;}
+  #btnDrawNetwork.active{background:var(--teal); color:#fff; border-color:var(--teal);}
+  .draw-bar{
+    display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;
+    background:var(--teal-deep); color:#fff; padding:10px 12px; border-radius:8px; margin-bottom:10px; font-size:13px;
+  }
+  .draw-bar.hidden{display:none;}
+  .draw-bar-actions{display:flex; gap:6px;}
+  .network-popup{font-size:13px; line-height:1.5; min-width:180px;}
+  .network-popup .popup-actions{display:flex; gap:6px; margin-top:6px;}
 
   /* ---------- List ---------- */
   main{padding:12px 16px 24px;}
@@ -309,6 +322,7 @@
   .btn-primary:disabled{opacity:.6;}
   .btn-danger{background:#fff; color:var(--red); border-color:var(--red);}
   .btn-block{width:100%;}
+  .btn-sm{padding:7px 10px; font-size:12.5px; border-radius:7px;}
   .gps-display{font-size:12px; color:var(--teal); font-family:ui-monospace,"SF Mono","Roboto Mono",Menlo,monospace;}
   #locationMap{height:220px; border-radius:8px; margin-top:10px; border:1px solid var(--border); background:var(--bg);}
   .map-hint{font-size:11px; color:var(--muted); margin-top:6px;}
@@ -517,6 +531,18 @@
   <div id="assetList">
     <div class="empty-state">Yuklanmoqda...</div>
   </div>
+  <div id="mapToolbar" class="map-toolbar hidden">
+    <button type="button" class="btn" id="btnDrawNetwork">🖊 Tarmoq chizish</button>
+    <label class="map-toolbar-toggle"><input type="checkbox" id="chkShowNetworks" checked> Tarmoqlarni ko'rsat</label>
+  </div>
+  <div id="drawBar" class="draw-bar hidden">
+    <span id="drawBarText">Xaritada nuqtalarni ketma-ket belgilang</span>
+    <div class="draw-bar-actions">
+      <button type="button" class="btn btn-sm" id="btnDrawUndo">↩️ Orqaga</button>
+      <button type="button" class="btn btn-sm" id="btnDrawCancel">✖ Bekor</button>
+      <button type="button" class="btn btn-sm btn-primary" id="btnDrawFinish" disabled>✅ Tugatish</button>
+    </div>
+  </div>
   <div id="overviewMap" class="hidden"></div>
   <div id="globeViz" class="hidden"></div>
 </main>
@@ -665,6 +691,68 @@
   </div>
 </div>
 
+<!-- Network (tarmoq) segment form -->
+<div class="modal hidden" id="networkFormModal">
+  <div class="modal-sheet">
+    <div class="modal-head">
+      <h2 id="networkFormTitle">Yangi tarmoq qismi</h2>
+      <button class="modal-close" id="btnCloseNetworkForm">✕</button>
+    </div>
+    <form id="networkForm">
+      <div class="field">
+        <label>Nomi/belgisi (ixtiyoriy)</label>
+        <input type="text" id="nfLabel" placeholder="Masalan: Bobur ko'chasi tarmog'i">
+      </div>
+      <div class="field">
+        <label>Qaysi inshootga boradi</label>
+        <select id="nfParent" required></select>
+      </div>
+      <div class="row-2">
+        <div class="field">
+          <label>Diametri (mm)</label>
+          <input type="number" id="nfDiameter" min="0" step="1" placeholder="masalan 300">
+        </div>
+        <div class="field">
+          <label>Uzunligi</label>
+          <div class="gps-display" id="nfLength">—</div>
+        </div>
+      </div>
+      <div class="row-2">
+        <div class="field">
+          <label>Tarmoq turi</label>
+          <select id="nfType">
+            <option value="O'z oqimli">O'z oqimli</option>
+            <option value="Bosimli">Bosimli</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Materiali</label>
+          <select id="nfMaterial">
+            <option value="">—</option>
+            <option value="Temir-beton">Temir-beton</option>
+            <option value="Chugun">Chugun</option>
+            <option value="Polietilen (PE)">Polietilen (PE)</option>
+            <option value="Asbest-sement">Asbest-sement</option>
+            <option value="Boshqa">Boshqa</option>
+          </select>
+        </div>
+      </div>
+      <div class="field">
+        <label>Holati</label>
+        <select id="nfStatus">
+          <option value="ishlayapti">Ishlayapti</option>
+          <option value="tamirda">Ta'mirda</option>
+          <option value="nosoz">Nosoz</option>
+        </select>
+      </div>
+      <div class="form-actions">
+        <button type="button" class="btn" id="btnCancelNetworkForm">Bekor qilish</button>
+        <button type="submit" class="btn btn-primary">Saqlash</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <div id="toast"></div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
@@ -699,6 +787,7 @@ const firebaseConfig = {
 var isConfigured = !!(firebaseConfig.apiKey && firebaseConfig.apiKey.indexOf('BU_YERGA') === -1);
 var db = null;
 var assetsCollection = null;
+var networksCollection = null;
 
 if (isConfigured){
   try{
@@ -712,6 +801,7 @@ if (isConfigured){
       db = initializeFirestore(fbApp, {});
     }
     assetsCollection = collection(db, 'assets');
+    networksCollection = collection(db, 'networkSegments');
   } catch(initErr){
     console.error('Firebase init xatosi', initErr);
     db = null;
@@ -809,6 +899,18 @@ if (isConfigured){
       .then(function(){ return true; })
       .catch(function(err){ console.error("O'chirish xatosi", err); return false; });
   }
+  function saveNetworkToDb(seg){
+    if (!db) return Promise.resolve(false);
+    return setDoc(doc(networksCollection, seg.id), seg)
+      .then(function(){ return true; })
+      .catch(function(err){ console.error('Tarmoqni saqlash xatosi', err); return false; });
+  }
+  function deleteNetworkFromDb(id){
+    if (!db) return Promise.resolve(false);
+    return deleteDoc(doc(networksCollection, id))
+      .then(function(){ return true; })
+      .catch(function(err){ console.error("Tarmoqni o'chirish xatosi", err); return false; });
+  }
   function updateConnBadge(fromCache){
     var el = document.getElementById('connBadge');
     if (!el) return;
@@ -830,6 +932,15 @@ if (isConfigured){
       console.error('Tinglashda xatolik', err);
       document.getElementById('assetList').innerHTML = '<div class="empty-state">⚠️ Ma\'lumot olishda xatolik.<br>Firestore qoidalarini (Rules) tekshiring.</div>';
     });
+  }
+
+  var networks = [];
+  function startListeningNetworks(){
+    if (!db) return;
+    onSnapshot(networksCollection, function(snapshot){
+      networks = snapshot.docs.map(function(d){ return d.data(); });
+      if (currentView === 'map') renderNetworkLines();
+    }, function(err){ console.error('Tarmoqlarni tinglashda xatolik', err); });
   }
 
   /* ================= Rendering ================= */
@@ -1054,6 +1165,8 @@ if (isConfigured){
     document.getElementById('assetList').classList.toggle('hidden', view !== 'list');
     document.getElementById('overviewMap').classList.toggle('hidden', view !== 'map');
     document.getElementById('globeViz').classList.toggle('hidden', view !== 'globe');
+    document.getElementById('mapToolbar').classList.toggle('hidden', view !== 'map');
+    if (view !== 'map' && drawMode) setDrawMode(false);
     Array.prototype.forEach.call(document.querySelectorAll('.view-toggle-btn'), function(btn){
       btn.classList.toggle('active', btn.getAttribute('data-view') === view);
     });
@@ -1089,11 +1202,14 @@ if (isConfigured){
   /* ================= Umumiy xarita (barcha obyektlar) ================= */
   var overviewMap = null;
   var overviewMarkersLayer = null;
+  var networksLayer = null;
+  var legendNetworksEl = null;
 
   function ensureOverviewMap(){
     if (overviewMap || typeof L === 'undefined') return;
     overviewMap = L.map('overviewMap').setView(DEFAULT_MAP_CENTER, 6);
     addLayerSwitcher(overviewMap);
+    networksLayer = L.layerGroup().addTo(overviewMap);
     overviewMarkersLayer = L.layerGroup().addTo(overviewMap);
     var legend = L.control({ position:'bottomleft' });
     legend.onAdd = function(){
@@ -1104,10 +1220,46 @@ if (isConfigured){
       var statusRows = STATUSES.map(function(s){
         return '<div class="legend-row"><span class="legend-ring" style="border-color:' + s.color + '"></span>' + escapeHtml(s.name) + '</div>';
       }).join('');
-      div.innerHTML = '<div class="legend-title">Kategoriya (rang)</div>' + catRows + '<div class="legend-title" style="margin-top:5px;">Holat (chegara)</div>' + statusRows;
+      div.innerHTML = '<div class="legend-title">Kategoriya (rang)</div>' + catRows +
+        '<div class="legend-title" style="margin-top:5px;">Holat (chegara)</div>' + statusRows +
+        '<div class="legend-title" style="margin-top:5px;">Tarmoqlar (chiziq)</div><div id="legendNetworks"></div>';
+      legendNetworksEl = div.querySelector('#legendNetworks');
       return div;
     };
     legend.addTo(overviewMap);
+    overviewMap.on('click', function(e){
+      if (!drawMode) return;
+      addDrawPoint(e.latlng);
+    });
+    overviewMap.on('popupopen', function(e){
+      var el = e.popup.getElement();
+      if (!el) return;
+      var editBtn = el.querySelector('[data-net-edit]');
+      var delBtn = el.querySelector('[data-net-delete]');
+      if (editBtn) editBtn.addEventListener('click', function(){
+        var id = editBtn.getAttribute('data-net-edit');
+        overviewMap.closePopup();
+        openNetworkEditForm(id);
+      });
+      if (delBtn) delBtn.addEventListener('click', function(){
+        var id = delBtn.getAttribute('data-net-delete');
+        overviewMap.closePopup();
+        confirmDeleteNetwork(id);
+      });
+    });
+  }
+
+  function renderNetworksLegend(){
+    if (!legendNetworksEl) return;
+    var seen = {};
+    var rows = '';
+    networks.forEach(function(seg){
+      if (!seg.parentId || seen[seg.parentId]) return;
+      seen[seg.parentId] = true;
+      var parent = assets.filter(function(a){ return a.id === seg.parentId; })[0];
+      rows += '<div class="legend-row"><span class="legend-line" style="background:' + colorForFacility(seg.parentId) + '"></span>' + escapeHtml(parent ? (parent.name||'Nomsiz') : "Noma'lum") + '</div>';
+    });
+    legendNetworksEl.innerHTML = rows || '<div class="legend-row" style="color:var(--muted); font-style:italic;">Hali yo\'q</div>';
   }
 
   function renderMapView(){
@@ -1125,13 +1277,200 @@ if (isConfigured){
           radius: 9, weight: 3, color: status.color || '#666', fillColor: cat.color || '#666', fillOpacity: 0.95
         });
         marker.bindTooltip(escapeHtml(a.name || 'Nomsiz'), { permanent: true, direction: 'top', offset: [0, -8], className: 'map-label' });
-        marker.on('click', function(){ openDetail(a.id); });
+        marker.on('click', function(e){
+          if (drawMode){ L.DomEvent.stopPropagation(e); addDrawPoint(e.latlng); return; }
+          openDetail(a.id);
+        });
         marker.addTo(overviewMarkersLayer);
         pts.push([a.lat, a.lng]);
       });
+      renderNetworkLines();
       if (pts.length){ overviewMap.fitBounds(pts, { padding:[30,30], maxZoom:15 }); }
       else { overviewMap.setView(DEFAULT_MAP_CENTER, 6); }
     }, 60);
+  }
+
+  function renderNetworkLines(){
+    if (!networksLayer) return;
+    networksLayer.clearLayers();
+    var showChk = document.getElementById('chkShowNetworks');
+    var show = !showChk || showChk.checked;
+    if (show){
+      networks.forEach(function(seg){
+        if (!seg.geometry || seg.geometry.length < 2) return;
+        var latlngs = seg.geometry.map(function(p){ return [p.lat, p.lng]; });
+        var color = colorForFacility(seg.parentId);
+        var weight = Math.max(3, Math.min(10, (seg.diameter || 150) / 60));
+        var pl = L.polyline(latlngs, { color: color, weight: weight, opacity: 0.85, lineCap: 'round' });
+        pl.on('click', function(e){
+          if (drawMode){ L.DomEvent.stopPropagation(e); addDrawPoint(e.latlng); return; }
+          L.DomEvent.stopPropagation(e);
+          pl.bindPopup(buildNetworkPopupHtml(seg)).openPopup(e.latlng);
+        });
+        pl.addTo(networksLayer);
+      });
+    }
+    renderNetworksLegend();
+  }
+
+  /* ================= Tarmoq chizish (qo'lda chiziladigan tarmoq qismlari) ================= */
+  var NETWORK_PALETTE = ['#E63946','#2A9D8F','#E9C46A','#5C4D7D','#F4A261','#457B9D','#BC6C25','#8338EC','#06D6A0','#D00000','#3A86FF','#FF006E'];
+  function colorForFacility(parentId){
+    if (!parentId) return '#888888';
+    var hash = 0;
+    for (var i=0;i<parentId.length;i++){ hash = (hash * 31 + parentId.charCodeAt(i)) >>> 0; }
+    return NETWORK_PALETTE[hash % NETWORK_PALETTE.length];
+  }
+
+  var drawMode = false;
+  var drawPoints = [];
+  var drawPolyline = null;
+  var drawVertexLayer = null;
+  var pendingGeometry = null;
+  var editingNetworkId = null;
+
+  function setDrawMode(on){
+    drawMode = on;
+    document.getElementById('drawBar').classList.toggle('hidden', !on);
+    document.getElementById('btnDrawNetwork').classList.toggle('active', on);
+    if (!on){
+      drawPoints = [];
+      if (overviewMap){
+        if (drawPolyline){ overviewMap.removeLayer(drawPolyline); }
+        if (drawVertexLayer){ overviewMap.removeLayer(drawVertexLayer); }
+      }
+      drawPolyline = null;
+      drawVertexLayer = null;
+    } else {
+      updateDrawBarText();
+    }
+  }
+
+  function addDrawPoint(latlng){
+    if (latlng.wrap) latlng = latlng.wrap();
+    drawPoints.push(latlng);
+    refreshDrawLayer();
+    updateDrawBarText();
+  }
+
+  function refreshDrawLayer(){
+    if (!overviewMap) return;
+    if (drawPolyline){ overviewMap.removeLayer(drawPolyline); drawPolyline = null; }
+    if (drawVertexLayer){ overviewMap.removeLayer(drawVertexLayer); }
+    drawVertexLayer = L.layerGroup().addTo(overviewMap);
+    drawPoints.forEach(function(p){
+      L.circleMarker(p, { radius: 5, color: '#fff', weight: 2, fillColor: '#E63946', fillOpacity: 1, interactive: false }).addTo(drawVertexLayer);
+    });
+    if (drawPoints.length >= 2){
+      drawPolyline = L.polyline(drawPoints, { color: '#E63946', weight: 4, dashArray: '6,6', interactive: false }).addTo(overviewMap);
+    }
+  }
+
+  function updateDrawBarText(){
+    var txt = document.getElementById('drawBarText');
+    if (txt) txt.textContent = drawPoints.length + " nuqta belgilandi" + (drawPoints.length < 2 ? " — davom eting" : " — tugatish mumkin");
+    var finishBtn = document.getElementById('btnDrawFinish');
+    if (finishBtn) finishBtn.disabled = drawPoints.length < 2;
+  }
+
+  function computeLineLengthKm(points){
+    var total = 0;
+    for (var i=1;i<points.length;i++){
+      total += points[i-1].distanceTo(points[i]);
+    }
+    return total / 1000;
+  }
+
+  function populateNetworkParentOptions(selectedId){
+    var sel = document.getElementById('nfParent');
+    var facilities = assets.filter(function(a){ return !a.parentId; });
+    sel.innerHTML = '<option value="">— tanlang —</option>' + facilities.map(function(a){
+      var cat = getCategory(a.category) || {};
+      return '<option value="' + a.id + '">' + escapeHtml(cat.icon || '') + ' ' + escapeHtml(a.name || 'Nomsiz') + '</option>';
+    }).join('');
+    sel.value = selectedId || '';
+  }
+
+  function openNetworkAddForm(){
+    editingNetworkId = null;
+    document.getElementById('networkFormTitle').textContent = "Yangi tarmoq qismi";
+    document.getElementById('networkForm').reset();
+    populateNetworkParentOptions(null);
+    document.getElementById('nfLength').textContent = computeLineLengthKm(pendingGeometry).toFixed(2) + ' km';
+    document.getElementById('networkFormModal').classList.remove('hidden');
+  }
+
+  function openNetworkEditForm(id){
+    var seg = networks.filter(function(n){ return n.id === id; })[0];
+    if (!seg) return;
+    editingNetworkId = id;
+    document.getElementById('networkFormTitle').textContent = "Tarmoqni tahrirlash";
+    populateNetworkParentOptions(seg.parentId);
+    document.getElementById('nfLabel').value = seg.label || '';
+    document.getElementById('nfDiameter').value = seg.diameter || '';
+    document.getElementById('nfType').value = seg.pipeType || "O'z oqimli";
+    document.getElementById('nfMaterial').value = seg.material || '';
+    document.getElementById('nfStatus').value = seg.status || 'ishlayapti';
+    document.getElementById('nfLength').textContent = (seg.lengthKm || 0).toFixed(2) + ' km';
+    document.getElementById('networkFormModal').classList.remove('hidden');
+  }
+
+  function closeNetworkForm(){
+    document.getElementById('networkFormModal').classList.add('hidden');
+  }
+
+  function handleNetworkFormSubmit(e){
+    e.preventDefault();
+    var parentId = document.getElementById('nfParent').value;
+    if (!parentId){ showToast('Inshootni tanlang'); return; }
+    var existing = editingNetworkId ? networks.filter(function(n){ return n.id === editingNetworkId; })[0] : null;
+    var geometry = existing ? existing.geometry : pendingGeometry.map(function(p){ return { lat: p.lat, lng: p.lng }; });
+    var lengthKm = existing ? existing.lengthKm : computeLineLengthKm(pendingGeometry);
+    var seg = {
+      id: editingNetworkId || uid(),
+      parentId: parentId,
+      label: document.getElementById('nfLabel').value.trim(),
+      diameter: parseFloat(document.getElementById('nfDiameter').value) || null,
+      pipeType: document.getElementById('nfType').value,
+      material: document.getElementById('nfMaterial').value,
+      status: document.getElementById('nfStatus').value,
+      lengthKm: lengthKm,
+      geometry: geometry,
+      createdAt: existing ? (existing.createdAt || Date.now()) : Date.now(),
+      updatedAt: Date.now()
+    };
+    var wasEditing = !!existing;
+    saveNetworkToDb(seg).then(function(ok){
+      showToast(ok ? (wasEditing ? 'Yangilandi' : "Tarmoq qo'shildi") : 'Xatolik yuz berdi');
+    });
+    closeNetworkForm();
+    setDrawMode(false);
+    pendingGeometry = null;
+    editingNetworkId = null;
+  }
+
+  function confirmDeleteNetwork(id){
+    if (!confirm("Bu tarmoq qismini o'chirishni tasdiqlaysizmi?")) return;
+    deleteNetworkFromDb(id).then(function(ok){ showToast(ok ? "O'chirildi" : "O'chirishda xatolik"); });
+  }
+
+  function buildNetworkPopupHtml(seg){
+    var parent = assets.filter(function(a){ return a.id === seg.parentId; })[0];
+    var statusObj = getStatus(seg.status) || {};
+    var html = '<div class="network-popup">';
+    html += '<div><b>' + escapeHtml(seg.label || 'Tarmoq qismi') + '</b></div>';
+    html += '<div>Inshoot: ' + escapeHtml(parent ? (parent.name||'Nomsiz') : "Noma'lum") + '</div>';
+    if (seg.diameter) html += '<div>Diametri: ' + escapeHtml(String(seg.diameter)) + ' mm</div>';
+    if (seg.pipeType) html += '<div>Turi: ' + escapeHtml(seg.pipeType) + '</div>';
+    if (seg.material) html += '<div>Materiali: ' + escapeHtml(seg.material) + '</div>';
+    html += '<div>Uzunligi: ' + (seg.lengthKm ? seg.lengthKm.toFixed(2) : '0') + ' km</div>';
+    html += '<div>Holati: <span style="color:' + (statusObj.color||'#666') + '">' + escapeHtml(statusObj.name||'') + '</span></div>';
+    html += '<div class="popup-actions">' +
+      '<button type="button" class="btn btn-sm" data-net-edit="' + seg.id + '">✏️ Tahrirlash</button>' +
+      '<button type="button" class="btn btn-sm btn-danger" data-net-delete="' + seg.id + '">🗑 O\'chirish</button>' +
+      '</div>';
+    html += '</div>';
+    return html;
   }
 
   /* ================= 3D Globus ================= */
@@ -1822,6 +2161,24 @@ if (isConfigured){
       if (e.target.files && e.target.files[0]) importDataFile(e.target.files[0]);
       e.target.value = '';
     });
+
+    document.getElementById('btnDrawNetwork').addEventListener('click', function(){ setDrawMode(!drawMode); });
+    document.getElementById('chkShowNetworks').addEventListener('change', renderNetworkLines);
+    document.getElementById('btnDrawUndo').addEventListener('click', function(){
+      drawPoints.pop();
+      refreshDrawLayer();
+      updateDrawBarText();
+    });
+    document.getElementById('btnDrawCancel').addEventListener('click', function(){ setDrawMode(false); });
+    document.getElementById('btnDrawFinish').addEventListener('click', function(){
+      if (drawPoints.length < 2) return;
+      pendingGeometry = drawPoints.slice();
+      openNetworkAddForm();
+    });
+    document.getElementById('networkForm').addEventListener('submit', handleNetworkFormSubmit);
+    document.getElementById('btnCloseNetworkForm').addEventListener('click', closeNetworkForm);
+    document.getElementById('btnCancelNetworkForm').addEventListener('click', closeNetworkForm);
+    document.getElementById('networkFormModal').addEventListener('click', function(e){ if (e.target.id === 'networkFormModal') closeNetworkForm(); });
   }
 
   /* ================= Config-needed screen ================= */
@@ -1849,6 +2206,7 @@ if (isConfigured){
       return;
     }
     startListening();
+    startListeningNetworks();
   }
 
   init();
