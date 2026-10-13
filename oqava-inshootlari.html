@@ -582,6 +582,10 @@
           <button type="button" class="btn" id="btnGPS">📍 GPS olish</button>
           <span class="gps-display" id="gpsDisplay"></span>
         </div>
+        <div class="gps-row" style="margin-top:8px;">
+          <input type="text" id="fCoordInput" placeholder="Koordinata: 41.311000, 69.279000" style="flex:1; min-width:0;">
+          <button type="button" class="btn" id="btnFindCoord" style="flex:none;">🔍 Topish</button>
+        </div>
         <div id="locationMap"></div>
         <div class="map-hint">Xaritada bosing yoki markerni suring — aniq nuqtani belgilash uchun</div>
       </div>
@@ -717,13 +721,18 @@
           <div class="gps-display" id="nfLength">—</div>
         </div>
       </div>
+      <div class="field">
+        <button type="button" class="btn btn-sm" id="btnRedrawGeometry">📍 Chizmani qayta chizish</button>
+      </div>
       <div class="row-2">
         <div class="field">
           <label>Tarmoq turi</label>
           <select id="nfType">
             <option value="O'z oqimli">O'z oqimli</option>
             <option value="Bosimli">Bosimli</option>
+            <option value="__custom">Boshqa (qo'lda kiritish)</option>
           </select>
+          <input type="text" id="nfTypeCustom" placeholder="Turini yozing" style="display:none; margin-top:8px;">
         </div>
         <div class="field">
           <label>Materiali</label>
@@ -745,6 +754,7 @@
           <option value="nosoz">Nosoz</option>
         </select>
       </div>
+      <button type="button" class="btn btn-danger btn-block" id="btnDeleteNetwork" style="display:none; margin-bottom:10px;">🗑 Tarmoqni o'chirish</button>
       <div class="form-actions">
         <button type="button" class="btn" id="btnCancelNetworkForm">Bekor qilish</button>
         <button type="submit" class="btn btn-primary">Saqlash</button>
@@ -1231,22 +1241,7 @@ if (isConfigured){
       if (!drawMode) return;
       addDrawPoint(e.latlng);
     });
-    overviewMap.on('popupopen', function(e){
-      var el = e.popup.getElement();
-      if (!el) return;
-      var editBtn = el.querySelector('[data-net-edit]');
-      var delBtn = el.querySelector('[data-net-delete]');
-      if (editBtn) editBtn.addEventListener('click', function(){
-        var id = editBtn.getAttribute('data-net-edit');
-        overviewMap.closePopup();
-        openNetworkEditForm(id);
-      });
-      if (delBtn) delBtn.addEventListener('click', function(){
-        var id = delBtn.getAttribute('data-net-delete');
-        overviewMap.closePopup();
-        confirmDeleteNetwork(id);
-      });
-    });
+    overviewMap.on('zoomend', function(){ renderNetworkLines(); });
   }
 
   function renderNetworksLegend(){
@@ -1290,6 +1285,18 @@ if (isConfigured){
     }, 60);
   }
 
+  function weightForSegment(seg){
+    // Leaflet polyline weight is a FIXED pixel width, so at a zoomed-out view it
+    // represents a huge real-world distance and visually swallows the map ("like a road").
+    // Scale it relative to a reference zoom so it stays thin when zoomed out and only
+    // grows when zoomed in close enough to actually inspect the pipe.
+    var refZoom = 15;
+    var zoom = overviewMap ? overviewMap.getZoom() : refZoom;
+    var base = Math.max(2, Math.min(7, (seg.diameter || 150) / 100));
+    var scale = Math.pow(1.3, zoom - refZoom);
+    return Math.max(1.5, Math.min(8, base * scale));
+  }
+
   function renderNetworkLines(){
     if (!networksLayer) return;
     networksLayer.clearLayers();
@@ -1300,12 +1307,12 @@ if (isConfigured){
         if (!seg.geometry || seg.geometry.length < 2) return;
         var latlngs = seg.geometry.map(function(p){ return [p.lat, p.lng]; });
         var color = colorForFacility(seg.parentId);
-        var weight = Math.max(3, Math.min(10, (seg.diameter || 150) / 60));
+        var weight = weightForSegment(seg);
         var pl = L.polyline(latlngs, { color: color, weight: weight, opacity: 0.85, lineCap: 'round' });
         pl.on('click', function(e){
           if (drawMode){ L.DomEvent.stopPropagation(e); addDrawPoint(e.latlng); return; }
           L.DomEvent.stopPropagation(e);
-          pl.bindPopup(buildNetworkPopupHtml(seg)).openPopup(e.latlng);
+          openNetworkEditForm(seg.id);
         });
         pl.addTo(networksLayer);
       });
@@ -1328,6 +1335,8 @@ if (isConfigured){
   var drawVertexLayer = null;
   var pendingGeometry = null;
   var editingNetworkId = null;
+  var redrawingGeometryFor = null; // non-null while re-drawing an EXISTING segment's path
+  var drawFormShown = false; // whether the attribute form was already shown during this draw session
 
   function setDrawMode(on){
     drawMode = on;
@@ -1335,6 +1344,8 @@ if (isConfigured){
     document.getElementById('btnDrawNetwork').classList.toggle('active', on);
     if (!on){
       drawPoints = [];
+      redrawingGeometryFor = null;
+      drawFormShown = false;
       if (overviewMap){
         if (drawPolyline){ overviewMap.removeLayer(drawPolyline); }
         if (drawVertexLayer){ overviewMap.removeLayer(drawVertexLayer); }
@@ -1391,12 +1402,30 @@ if (isConfigured){
     sel.value = selectedId || '';
   }
 
+  var NETWORK_FIXED_TYPES = ["O'z oqimli", "Bosimli"];
+
+  function setNfTypeValue(pipeType){
+    if (!pipeType || NETWORK_FIXED_TYPES.indexOf(pipeType) !== -1){
+      document.getElementById('nfType').value = pipeType || "O'z oqimli";
+      document.getElementById('nfTypeCustom').style.display = 'none';
+      document.getElementById('nfTypeCustom').value = '';
+    } else {
+      document.getElementById('nfType').value = '__custom';
+      document.getElementById('nfTypeCustom').style.display = '';
+      document.getElementById('nfTypeCustom').value = pipeType;
+    }
+  }
+
   function openNetworkAddForm(){
     editingNetworkId = null;
+    redrawingGeometryFor = null;
     document.getElementById('networkFormTitle').textContent = "Yangi tarmoq qismi";
     document.getElementById('networkForm').reset();
+    document.getElementById('nfTypeCustom').style.display = 'none';
+    document.getElementById('btnDeleteNetwork').style.display = 'none';
     populateNetworkParentOptions(null);
     document.getElementById('nfLength').textContent = computeLineLengthKm(pendingGeometry).toFixed(2) + ' km';
+    drawFormShown = true;
     document.getElementById('networkFormModal').classList.remove('hidden');
   }
 
@@ -1404,14 +1433,18 @@ if (isConfigured){
     var seg = networks.filter(function(n){ return n.id === id; })[0];
     if (!seg) return;
     editingNetworkId = id;
+    redrawingGeometryFor = null;
+    pendingGeometry = null;
     document.getElementById('networkFormTitle').textContent = "Tarmoqni tahrirlash";
     populateNetworkParentOptions(seg.parentId);
     document.getElementById('nfLabel').value = seg.label || '';
     document.getElementById('nfDiameter').value = seg.diameter || '';
-    document.getElementById('nfType').value = seg.pipeType || "O'z oqimli";
+    setNfTypeValue(seg.pipeType);
     document.getElementById('nfMaterial').value = seg.material || '';
     document.getElementById('nfStatus').value = seg.status || 'ishlayapti';
     document.getElementById('nfLength').textContent = (seg.lengthKm || 0).toFixed(2) + ' km';
+    document.getElementById('btnDeleteNetwork').style.display = '';
+    drawFormShown = true;
     document.getElementById('networkFormModal').classList.remove('hidden');
   }
 
@@ -1419,19 +1452,51 @@ if (isConfigured){
     document.getElementById('networkFormModal').classList.add('hidden');
   }
 
+  function startRedrawGeometry(){
+    var basisPoints = pendingGeometry;
+    if (!basisPoints && editingNetworkId){
+      var seg = networks.filter(function(n){ return n.id === editingNetworkId; })[0];
+      basisPoints = seg ? seg.geometry : [];
+    }
+    basisPoints = basisPoints || [];
+    redrawingGeometryFor = editingNetworkId;
+    drawFormShown = true;
+    closeNetworkForm();
+    drawPoints = basisPoints.map(function(p){ return L.latLng(p.lat, p.lng); });
+    setDrawMode(true);
+    refreshDrawLayer();
+    if (drawPoints.length && overviewMap) overviewMap.panTo(drawPoints[drawPoints.length - 1]);
+    showToast("Xaritada nuqta qo'shing yoki \"Orqaga\" bilan oxirgisini olib tashlang");
+  }
+
+  function finishDrawingToForm(){
+    pendingGeometry = drawPoints.slice();
+    var lengthTxt = computeLineLengthKm(pendingGeometry).toFixed(2) + ' km';
+    if (drawFormShown){
+      // returning from a mid-session redraw — keep whatever the user already filled in
+      document.getElementById('nfLength').textContent = lengthTxt;
+      document.getElementById('networkFormModal').classList.remove('hidden');
+    } else {
+      openNetworkAddForm();
+    }
+  }
+
   function handleNetworkFormSubmit(e){
     e.preventDefault();
     var parentId = document.getElementById('nfParent').value;
     if (!parentId){ showToast('Inshootni tanlang'); return; }
     var existing = editingNetworkId ? networks.filter(function(n){ return n.id === editingNetworkId; })[0] : null;
-    var geometry = existing ? existing.geometry : pendingGeometry.map(function(p){ return { lat: p.lat, lng: p.lng }; });
-    var lengthKm = existing ? existing.lengthKm : computeLineLengthKm(pendingGeometry);
+    var geometry = pendingGeometry ? pendingGeometry.map(function(p){ return { lat: p.lat, lng: p.lng }; }) : (existing ? existing.geometry : []);
+    var lengthKm = pendingGeometry ? computeLineLengthKm(pendingGeometry) : (existing ? existing.lengthKm : 0);
+    if (!geometry || geometry.length < 2){ showToast('Avval xaritada chizing'); return; }
+    var typeSel = document.getElementById('nfType').value;
+    var pipeType = (typeSel === '__custom') ? document.getElementById('nfTypeCustom').value.trim() : typeSel;
     var seg = {
       id: editingNetworkId || uid(),
       parentId: parentId,
       label: document.getElementById('nfLabel').value.trim(),
       diameter: parseFloat(document.getElementById('nfDiameter').value) || null,
-      pipeType: document.getElementById('nfType').value,
+      pipeType: pipeType,
       material: document.getElementById('nfMaterial').value,
       status: document.getElementById('nfStatus').value,
       lengthKm: lengthKm,
@@ -1452,25 +1517,10 @@ if (isConfigured){
   function confirmDeleteNetwork(id){
     if (!confirm("Bu tarmoq qismini o'chirishni tasdiqlaysizmi?")) return;
     deleteNetworkFromDb(id).then(function(ok){ showToast(ok ? "O'chirildi" : "O'chirishda xatolik"); });
-  }
-
-  function buildNetworkPopupHtml(seg){
-    var parent = assets.filter(function(a){ return a.id === seg.parentId; })[0];
-    var statusObj = getStatus(seg.status) || {};
-    var html = '<div class="network-popup">';
-    html += '<div><b>' + escapeHtml(seg.label || 'Tarmoq qismi') + '</b></div>';
-    html += '<div>Inshoot: ' + escapeHtml(parent ? (parent.name||'Nomsiz') : "Noma'lum") + '</div>';
-    if (seg.diameter) html += '<div>Diametri: ' + escapeHtml(String(seg.diameter)) + ' mm</div>';
-    if (seg.pipeType) html += '<div>Turi: ' + escapeHtml(seg.pipeType) + '</div>';
-    if (seg.material) html += '<div>Materiali: ' + escapeHtml(seg.material) + '</div>';
-    html += '<div>Uzunligi: ' + (seg.lengthKm ? seg.lengthKm.toFixed(2) : '0') + ' km</div>';
-    html += '<div>Holati: <span style="color:' + (statusObj.color||'#666') + '">' + escapeHtml(statusObj.name||'') + '</span></div>';
-    html += '<div class="popup-actions">' +
-      '<button type="button" class="btn btn-sm" data-net-edit="' + seg.id + '">✏️ Tahrirlash</button>' +
-      '<button type="button" class="btn btn-sm btn-danger" data-net-delete="' + seg.id + '">🗑 O\'chirish</button>' +
-      '</div>';
-    html += '</div>';
-    return html;
+    closeNetworkForm();
+    setDrawMode(false);
+    pendingGeometry = null;
+    editingNetworkId = null;
   }
 
   /* ================= 3D Globus ================= */
@@ -1708,6 +1758,21 @@ if (isConfigured){
       pickerMarker.setLatLng([lat, lng]);
       if (recenter) pickerMap.setView([lat, lng], 16);
     }
+  }
+
+  function handleFindCoord(){
+    var raw = document.getElementById('fCoordInput').value.trim();
+    if (!raw){ showToast('Koordinatani kiriting'); return; }
+    var parts = raw.split(/[,;\s]+/).filter(function(s){ return s.length; });
+    if (parts.length < 2){ showToast("Format: 41.311000, 69.279000"); return; }
+    var lat = parseFloat(parts[0]);
+    var lng = parseFloat(parts[1]);
+    if (isNaN(lat) || isNaN(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180){
+      showToast("Noto'g'ri koordinata");
+      return;
+    }
+    setFormLatLng(lat, lng, true);
+    showToast('Topildi');
   }
 
   /* ================= Xarita qatlamlari: Xarita / Sun'iy yo'ldosh / Hybrid ================= */
@@ -2108,6 +2173,10 @@ if (isConfigured){
     document.getElementById('assetForm').addEventListener('submit', handleFormSubmit);
     document.getElementById('fCategory').addEventListener('change', function(){ populateSubtypes(this.value); renderExtraFieldsInputs(this.value); });
     document.getElementById('btnGPS').addEventListener('click', captureGPS);
+    document.getElementById('btnFindCoord').addEventListener('click', handleFindCoord);
+    document.getElementById('fCoordInput').addEventListener('keydown', function(e){
+      if (e.key === 'Enter'){ e.preventDefault(); handleFindCoord(); }
+    });
     document.getElementById('btnAddPhoto').addEventListener('click', function(){ document.getElementById('fPhotoInput').click(); });
     document.getElementById('fPhotoInput').addEventListener('change', function(e){ handlePhotoFiles(e.target.files); e.target.value=''; });
 
@@ -2162,7 +2231,10 @@ if (isConfigured){
       e.target.value = '';
     });
 
-    document.getElementById('btnDrawNetwork').addEventListener('click', function(){ setDrawMode(!drawMode); });
+    document.getElementById('btnDrawNetwork').addEventListener('click', function(){
+      if (!drawMode){ editingNetworkId = null; redrawingGeometryFor = null; pendingGeometry = null; drawFormShown = false; }
+      setDrawMode(!drawMode);
+    });
     document.getElementById('chkShowNetworks').addEventListener('change', renderNetworkLines);
     document.getElementById('btnDrawUndo').addEventListener('click', function(){
       drawPoints.pop();
@@ -2172,8 +2244,15 @@ if (isConfigured){
     document.getElementById('btnDrawCancel').addEventListener('click', function(){ setDrawMode(false); });
     document.getElementById('btnDrawFinish').addEventListener('click', function(){
       if (drawPoints.length < 2) return;
-      pendingGeometry = drawPoints.slice();
-      openNetworkAddForm();
+      finishDrawingToForm();
+    });
+    document.getElementById('btnRedrawGeometry').addEventListener('click', startRedrawGeometry);
+    document.getElementById('nfType').addEventListener('change', function(){
+      document.getElementById('nfTypeCustom').style.display = (this.value === '__custom') ? '' : 'none';
+    });
+    document.getElementById('btnDeleteNetwork').addEventListener('click', function(){
+      if (!editingNetworkId) return;
+      confirmDeleteNetwork(editingNetworkId);
     });
     document.getElementById('networkForm').addEventListener('submit', handleNetworkFormSubmit);
     document.getElementById('btnCloseNetworkForm').addEventListener('click', closeNetworkForm);
